@@ -14,7 +14,7 @@ class Ui_home(object):
             QWidget {
                 background-color: #2D2D2D;
                 color: #FFFFFF;
-                font-family: 'Segoe UI';
+                font-family: 'Segoe UI', 'Arial', sans-serif;
             }
 
             QTextEdit {
@@ -23,9 +23,33 @@ class Ui_home(object):
                 border: 2px solid #3E3E3E;
                 border-radius: 4px;
                 padding: 10px;
-                font-family: 'Consolas';
-                font-size: 12px;
+                font-family: 'Consolas', 'Courier New', monospace;
+                font-size: 13px;
                 selection-background-color: #3E3E3E;
+                line-height: 1.3;
+            }
+
+            QTableWidget {
+                background-color: #1E1E1E;
+                color: #DCDCDC;
+                border: 2px solid #3E3E3E;
+                border-radius: 4px;
+                gridline-color: #505050;
+                selection-background-color: #3A5C85;
+                selection-color: #FFFFFF;
+            }
+
+            QTableWidget::item {
+                padding: 4px;
+                border-bottom: 1px solid #4E4E4E;
+            }
+
+            QHeaderView::section {
+                background-color: #383838;
+                color: #FFFFFF;
+                padding: 8px;
+                border: 1px solid #505050;
+                font-weight: bold;
             }
 
             QPushButton {
@@ -64,6 +88,7 @@ class Ui_home(object):
                 padding: 8px 16px;
                 border-top-left-radius: 4px;
                 border-top-right-radius: 4px;
+                margin-right: 2px;
             }
 
             QTabBar::tab:selected {
@@ -81,25 +106,44 @@ class Ui_home(object):
         self.mainLayout.setSpacing(15)
 
         # Título
-        self.titleLabel = QtWidgets.QLabel("Compilador Avanzado", self.centralWidget)
+        self.titleLabel = QtWidgets.QLabel("Analizador de Código Java", self.centralWidget)
         self.titleLabel.setAlignment(QtCore.Qt.AlignCenter)
         self.titleLabel.setStyleSheet("""
             QLabel {
-                font-size: 24px;
+                font-size: 28px;
                 font-weight: bold;
-                color: #569CD6;
+                color: #F89406;
                 padding: 10px;
             }
         """)
         self.mainLayout.addWidget(self.titleLabel)
 
         # Área de código fuente
-        self.sourceGroup = QtWidgets.QGroupBox("Código Fuente")
-        self.sourceGroup.setStyleSheet("QGroupBox { font-size: 16px; }")
+        self.sourceGroup = QtWidgets.QGroupBox("Código Fuente Java")
+        self.sourceGroup.setStyleSheet("""
+            QGroupBox {
+                font-size: 16px;
+                border: 2px solid #3E3E3E;
+                border-radius: 6px;
+                margin-top: 12px;
+                padding-top: 12px;
+            }
+
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top center;
+                padding: 0 5px;
+                color: #F89406;
+                font-weight: bold;
+            }
+        """)
+
         self.sourceLayout = QtWidgets.QVBoxLayout(self.sourceGroup)
 
         self.tx_ingreso = QtWidgets.QTextEdit()
-        self.tx_ingreso.setPlaceholderText("Escribe tu código aquí o carga un archivo...")
+        self.tx_ingreso.setPlaceholderText("Escribe tu código Java aquí o carga un archivo...")
+        self.tx_ingreso.setLineWrapMode(QtWidgets.QTextEdit.NoWrap)
+        self.tx_ingreso.setTabStopWidth(40)  # 4 espacios para tabs
         self.sourceLayout.addWidget(self.tx_ingreso)
         self.mainLayout.addWidget(self.sourceGroup)
 
@@ -118,7 +162,7 @@ class Ui_home(object):
             }
         """)
 
-        self.bt_limpiar = QtWidgets.QPushButton()
+        self.bt_limpiar = QtWidgets.QPushButton("Limpiar")
         self.bt_limpiar.setIcon(QtGui.QIcon.fromTheme("edit-clear"))
         self.bt_limpiar.setToolTip("Limpiar todo")
 
@@ -130,22 +174,40 @@ class Ui_home(object):
 
         # Panel de análisis con pestañas
         self.analysisTabs = QtWidgets.QTabWidget()
+        self.analysisTabs.setStyleSheet("""
+            QTabWidget::tab-bar {
+                alignment: center;
+            }
+        """)
 
         # Pestaña de análisis léxico
         self.lexicalTab = QtWidgets.QWidget()
         self.lexicalLayout = QtWidgets.QVBoxLayout(self.lexicalTab)
-        self.tx_lexico = QtWidgets.QTextEdit()
-        self.tx_lexico.setPlaceholderText("Resultados del análisis léxico...")
-        self.lexicalLayout.addWidget(self.tx_lexico)
-        self.analysisTabs.addTab(self.lexicalTab, "Léxico")
+
+        # Usar tabla en lugar de textEdit para el análisis léxico
+        self.tb_lexico = QtWidgets.QTableWidget()
+        self.tb_lexico.setColumnCount(4)
+        self.tb_lexico.setHorizontalHeaderLabels(["Línea", "Tipo", "Valor", "Posición"])
+        self.tb_lexico.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
+        self.tb_lexico.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.Stretch)
+        self.tb_lexico.horizontalHeader().setSectionResizeMode(2, QtWidgets.QHeaderView.Stretch)
+        self.tb_lexico.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.ResizeToContents)
+        self.tb_lexico.verticalHeader().setVisible(False)
+        self.tb_lexico.setAlternatingRowColors(True)
+        self.tb_lexico.setEditTriggers(QtWidgets.QTableWidget.NoEditTriggers)
+        self.tb_lexico.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+
+        self.lexicalLayout.addWidget(self.tb_lexico)
+        self.analysisTabs.addTab(self.lexicalTab, "Análisis Léxico")
 
         # Pestaña de análisis sintáctico
         self.syntaxTab = QtWidgets.QWidget()
         self.syntaxLayout = QtWidgets.QVBoxLayout(self.syntaxTab)
         self.tx_sintactico = QtWidgets.QTextEdit()
         self.tx_sintactico.setPlaceholderText("Resultados del análisis sintáctico...")
+        self.tx_sintactico.setReadOnly(True)
         self.syntaxLayout.addWidget(self.tx_sintactico)
-        self.analysisTabs.addTab(self.syntaxTab, "Sintáctico")
+        self.analysisTabs.addTab(self.syntaxTab, "Análisis Sintáctico")
 
         self.mainLayout.addWidget(self.analysisTabs)
 
@@ -155,11 +217,27 @@ class Ui_home(object):
 
         self.bt_lexico = QtWidgets.QPushButton("Analizar Léxico")
         self.bt_lexico.setIcon(QtGui.QIcon.fromTheme("edit-find"))
-        self.bt_lexico.setStyleSheet("background-color: #57A64A; border-color: #65B158;")
+        self.bt_lexico.setStyleSheet("""
+            QPushButton {
+                background-color: #57A64A;
+                border-color: #65B158;
+            }
+            QPushButton:hover {
+                background-color: #65B158;
+            }
+        """)
 
         self.bt_sintactico = QtWidgets.QPushButton("Analizar Sintaxis")
         self.bt_sintactico.setIcon(QtGui.QIcon.fromTheme("dialog-ok-apply"))
-        self.bt_sintactico.setStyleSheet("background-color: #D69D45; border-color: #E0A64D;")
+        self.bt_sintactico.setStyleSheet("""
+            QPushButton {
+                background-color: #D69D45;
+                border-color: #E0A64D;
+            }
+            QPushButton:hover {
+                background-color: #E0A64D;
+            }
+        """)
 
         self.bottomControls.addWidget(self.bt_lexico)
         self.bottomControls.addWidget(self.bt_sintactico)
@@ -175,22 +253,34 @@ class Ui_home(object):
                 color: #858585;
                 font-size: 12px;
                 border-top: 1px solid #3C3C3C;
+                padding: 5px;
             }
         """)
         home.setStatusBar(self.estado)
 
+        # Configuración de teclas de acceso rápido
+        self.shortcut_run_lexical = QtWidgets.QShortcut(QtGui.QKeySequence("F5"), home)
+        self.shortcut_run_syntactic = QtWidgets.QShortcut(QtGui.QKeySequence("F6"), home)
+        self.shortcut_open = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+O"), home)
+        self.shortcut_clear = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+L"), home)
+
         home.setCentralWidget(self.centralWidget)
 
+        # Establecer texto inicial y tooltips
         self.retranslateUi(home)
         QtCore.QMetaObject.connectSlotsByName(home)
 
     def retranslateUi(self, home):
         _translate = QtCore.QCoreApplication.translate
-        home.setWindowTitle(_translate("home", "Compilador Avanzado"))
+        home.setWindowTitle(_translate("home", "Analizador de Código Java"))
         self.analysisTabs.setTabText(0, _translate("home", "Análisis Léxico"))
         self.analysisTabs.setTabText(1, _translate("home", "Análisis Sintáctico"))
         self.bt_lexico.setText(_translate("home", "Analizar Léxico"))
+        self.bt_lexico.setToolTip(_translate("home", "Realizar análisis léxico (F5)"))
         self.bt_sintactico.setText(_translate("home", "Analizar Sintaxis"))
+        self.bt_sintactico.setToolTip(_translate("home", "Realizar análisis sintáctico (F6)"))
         self.bt_archivo.setText(_translate("home", "Cargar Archivo"))
+        self.bt_archivo.setToolTip(_translate("home", "Abrir un archivo Java (Ctrl+O)"))
         self.bt_limpiar.setText(_translate("home", "Limpiar"))
-        self.sourceGroup.setTitle(_translate("home", "Código Fuente"))
+        self.bt_limpiar.setToolTip(_translate("home", "Limpiar todos los campos (Ctrl+L)"))
+        self.sourceGroup.setTitle(_translate("home", "Código Fuente Java"))

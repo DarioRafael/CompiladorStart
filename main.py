@@ -1,116 +1,361 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import sys
+import os
+from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QTableWidgetItem, QMessageBox
+from PyQt5.QtGui import QColor, QSyntaxHighlighter, QTextCharFormat, QFont
+from PyQt5.QtCore import QRegExp
 
-from PyQt5.QtWidgets import *
-from PyQt5.uic.properties import QtGui
+# Importar nuestros componentes
+from vista.home import Ui_home
+from analizador_lexico import prueba
+from analizador_sintactico import prueba_sintactica
 
-""" Importamos todas nuetras Ventana y funciones utiles"""
-from vista.home import  *
-from analizador_lexico import *
-from analizador_sintactico import *
+
+# Resaltador de sintaxis para Java
+class JavaHighlighter(QSyntaxHighlighter):
+    def __init__(self, parent=None):
+        super(JavaHighlighter, self).__init__(parent)
+
+        self.highlighting_rules = []
+
+        # Formato para palabras clave
+        keyword_format = QTextCharFormat()
+        keyword_format.setForeground(QColor("#569CD6"))
+        keyword_format.setFontWeight(QFont.Bold)
+
+        # Palabras clave de Java
+        java_keywords = [
+            "abstract", "assert", "boolean", "break", "byte", "case", "catch",
+            "char", "class", "const", "continue", "default", "do", "double",
+            "else", "enum", "extends", "final", "finally", "float", "for", "if",
+            "implements", "import", "instanceof", "int", "interface", "long",
+            "native", "new", "package", "private", "protected", "public", "return",
+            "short", "static", "strictfp", "super", "switch", "synchronized",
+            "this", "throw", "throws", "transient", "try", "void", "volatile", "while"
+        ]
+
+        for keyword in java_keywords:
+            pattern = QRegExp("\\b" + keyword + "\\b")
+            rule = (pattern, keyword_format)
+            self.highlighting_rules.append(rule)
+
+        # Formato para tipos de dato
+        type_format = QTextCharFormat()
+        type_format.setForeground(QColor("#4EC9B0"))
+        type_format.setFontWeight(QFont.Bold)
+
+        # Tipos primitivos y comunes
+        types = ["String", "Object", "List", "Map", "Set"]
+        for type_name in types:
+            pattern = QRegExp("\\b" + type_name + "\\b")
+            rule = (pattern, type_format)
+            self.highlighting_rules.append(rule)
+
+        # Formato para literales
+        literal_format = QTextCharFormat()
+        literal_format.setForeground(QColor("#B5CEA8"))
+
+        # true, false, null
+        literals = ["true", "false", "null"]
+        for literal in literals:
+            pattern = QRegExp("\\b" + literal + "\\b")
+            rule = (pattern, literal_format)
+            self.highlighting_rules.append(rule)
+
+        # Formato para números
+        number_format = QTextCharFormat()
+        number_format.setForeground(QColor("#B5CEA8"))
+        pattern = QRegExp("\\b[0-9]+\\b")
+        rule = (pattern, number_format)
+        self.highlighting_rules.append(rule)
+
+        # Formato para cadenas
+        string_format = QTextCharFormat()
+        string_format.setForeground(QColor("#CE9178"))
+        pattern = QRegExp("\".*\"")
+        pattern.setMinimal(True)
+        rule = (pattern, string_format)
+        self.highlighting_rules.append(rule)
+
+        # Formato para caracteres
+        char_format = QTextCharFormat()
+        char_format.setForeground(QColor("#CE9178"))
+        pattern = QRegExp("'.'")
+        rule = (pattern, char_format)
+        self.highlighting_rules.append(rule)
+
+        # Formato para comentarios de una línea
+        singleline_comment_format = QTextCharFormat()
+        singleline_comment_format.setForeground(QColor("#608B4E"))
+        pattern = QRegExp("//[^\n]*")
+        rule = (pattern, singleline_comment_format)
+        self.highlighting_rules.append(rule)
+
+        # Formato para comentarios multilinea
+        self.multiline_comment_format = QTextCharFormat()
+        self.multiline_comment_format.setForeground(QColor("#608B4E"))
+
+        self.comment_start_expression = QRegExp("/\\*")
+        self.comment_end_expression = QRegExp("\\*/")
+
+    def highlightBlock(self, text):
+        # Aplicar reglas de resaltado
+        for pattern, format in self.highlighting_rules:
+            expression = QRegExp(pattern)
+            index = expression.indexIn(text)
+            while index >= 0:
+                length = expression.matchedLength()
+                self.setFormat(index, length, format)
+                index = expression.indexIn(text, index + length)
+
+        # Procesar comentarios multilinea
+        self.setCurrentBlockState(0)
+
+        start_index = 0
+        if self.previousBlockState() != 1:
+            start_index = self.comment_start_expression.indexIn(text)
+
+        while start_index >= 0:
+            end_index = self.comment_end_expression.indexIn(text, start_index)
+
+            if end_index == -1:
+                self.setCurrentBlockState(1)
+                comment_length = len(text) - start_index
+            else:
+                comment_length = end_index - start_index + self.comment_end_expression.matchedLength()
+
+            self.setFormat(start_index, comment_length, self.multiline_comment_format)
+            start_index = self.comment_start_expression.indexIn(text, start_index + comment_length)
+
 
 class Main(QMainWindow):
-    """ Clase principal de nuestra app"""
+    """Clase principal de la aplicación"""
+
     def __init__(self):
-        """ Incializamos nuestra app"""
+        """Inicialización de la app"""
         QMainWindow.__init__(self)
 
-        # Instaciamos nuestra ventanas widget home
+        # Instanciar la UI
         self.home = Ui_home()
         self.home.setupUi(self)
 
-        # Eventos
+        # Aplicar resaltador de sintaxis de Java
+        self.highlighter = JavaHighlighter(self.home.tx_ingreso.document())
+
+        # Conectar eventos
         self.home.bt_lexico.clicked.connect(self.ev_lexico)
         self.home.bt_sintactico.clicked.connect(self.ev_sintactico)
-
         self.home.bt_archivo.clicked.connect(self.ev_archivo)
         self.home.bt_limpiar.clicked.connect(self.ev_limpiar)
 
-        #Desarrollandores
-        self.home.estado.showMessage("Desarrollando por Dario Rafael y Mario Alberto")
+        # Conectar atajos de teclado
+        self.home.shortcut_run_lexical.activated.connect(self.ev_lexico)
+        self.home.shortcut_run_syntactic.activated.connect(self.ev_sintactico)
+        self.home.shortcut_open.activated.connect(self.ev_archivo)
+        self.home.shortcut_clear.activated.connect(self.ev_limpiar)
+
+        # Mostrar información de la aplicación
+        self.home.estado.showMessage("Analizador de código Java - Desarrollado con PyQt5 y PLY")
+
+    # Modifica la función ev_lexico en tu archivo main.py
+    # Reemplaza el código existente de creación de ítems para la tabla por este:
+
+    # Modifica la función ev_lexico en tu archivo main.py
+    # Reemplaza el código existente de creación de ítems para la tabla por este:
 
     def ev_lexico(self):
-        '''
-        Manejo de analisis de expresion lexemas
-        :return: 
-        '''
-        # print("lexico")
+        """
+        Manejo del análisis léxico
+        """
+        # Limpiar la tabla
+        self.home.tb_lexico.setRowCount(0)
 
-        # limpiamos el campo
-        self.home.tx_lexico.setText('')
+        # Obtener el código fuente
+        codigo = self.home.tx_ingreso.toPlainText().strip()
 
-        #Obtenemos los datos ingresados
-        datos = self.home.tx_ingreso.toPlainText().strip()
+        if not codigo:
+            QMessageBox.warning(self, "Advertencia", "No hay código para analizar.")
+            return
 
-        # analizamos la lexemas de los datos ingresados
-        resultado_lexico = prueba(datos)
+        # Realizar el análisis léxico
+        try:
+            resultados = prueba(codigo)
 
-       # self.home.tx_lexico.setText("Analizando lexico")
-        cadena= ''
-        for lex in resultado_lexico:
-            cadena += lex + "\n"
-        self.home.tx_lexico.setText(cadena)
+            # Llenar la tabla con los resultados
+            self.home.tb_lexico.setRowCount(len(resultados))
 
+            # Alternar colores para filas
+            usar_fondo_oscuro = True
+
+            for i, token in enumerate(resultados):
+                # Alternar colores de fondo para mejorar legibilidad
+                if usar_fondo_oscuro:
+                    color_fondo = QColor("#1E1E1E")  # Fondo oscuro para filas impares
+                    color_texto = QColor("#FFFFFF")  # Texto blanco para fondo oscuro
+                else:
+                    color_fondo = QColor("#FFFFFF")  # Fondo blanco para filas pares
+                    color_texto = QColor("#FFFFFF")  # Texto negro para fondo blanco
+
+                usar_fondo_oscuro = not usar_fondo_oscuro  # Alternar para siguiente fila
+
+                # Si el resultado tiene el formato antiguo (cadena), manejarlo adecuadamente
+                if isinstance(token, str):
+                    partes = token.split()
+                    if len(partes) >= 6:  # Asegurarse de que hay suficientes partes
+                        linea = partes[1]
+                        tipo = partes[3]
+                        valor = partes[5]
+                        posicion = partes[7] if len(partes) >= 8 else "0"
+                    else:
+                        # Si no se puede dividir, usar valores por defecto
+                        linea = "0"
+                        tipo = "DESCONOCIDO"
+                        valor = token
+                        posicion = "0"
+
+                    if "Error" in token or "no valido" in token:
+                        color_fondo = QColor("#7E2D40")  # Fondo rojo para errores
+                        color_texto = QColor("#FFFFFF")  # Texto blanco para errores
+                else:
+                    # Formato nuevo (diccionario)
+                    linea = str(token.get("linea", "0"))
+                    tipo = token.get("tipo", "DESCONOCIDO")
+                    valor = str(token.get("valor", ""))
+                    posicion = str(token.get("posicion", "0"))
+
+                    if tipo == "ERROR":
+                        color_fondo = QColor("#7E2D40")  # Fondo rojo para errores
+                        color_texto = QColor("#FFFFFF")  # Texto blanco para errores
+
+                # Crear items para la tabla
+                item_linea = QTableWidgetItem(linea)
+                item_tipo = QTableWidgetItem(tipo)
+                item_valor = QTableWidgetItem(valor)
+                item_posicion = QTableWidgetItem(posicion)
+
+                # Aplicar colores
+                item_linea.setBackground(color_fondo)
+                item_tipo.setBackground(color_fondo)
+                item_valor.setBackground(color_fondo)
+                item_posicion.setBackground(color_fondo)
+
+                item_linea.setForeground(color_texto)
+                item_tipo.setForeground(color_texto)
+                item_valor.setForeground(color_texto)
+                item_posicion.setForeground(color_texto)
+
+                # Agregar a la tabla
+                self.home.tb_lexico.setItem(i, 0, item_linea)
+                self.home.tb_lexico.setItem(i, 1, item_tipo)
+                self.home.tb_lexico.setItem(i, 2, item_valor)
+                self.home.tb_lexico.setItem(i, 3, item_posicion)
+
+            # Desactivar el color alternante de filas nativo
+            self.home.tb_lexico.setAlternatingRowColors(False)
+
+            # Ajustar tamaño de las columnas
+            self.home.tb_lexico.resizeColumnsToContents()
+
+            # Mostrar mensaje en la barra de estado
+            self.home.estado.showMessage(f"Análisis léxico completado: {len(resultados)} tokens encontrados")
+
+            # Cambiar a la pestaña de análisis léxico
+            self.home.analysisTabs.setCurrentIndex(0)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error durante el análisis léxico: {str(e)}")
+            self.home.estado.showMessage(f"Error: {str(e)}")
 
     def ev_sintactico(self):
-        '''
-        Manejo de analisis gramatico
-        :return: 
-        '''
-        # print("sintactico")
+        """
+        Manejo del análisis sintáctico
+        """
+        # Limpiar el área de texto
+        self.home.tx_sintactico.clear()
 
-        # limpiamos el campo
-        self.home.tx_sintactico.setText('')
-        #Obtenemos los datos ingresados
-        datos = self.home.tx_ingreso.toPlainText().strip()
+        # Obtener el código fuente
+        codigo = self.home.tx_ingreso.toPlainText().strip()
 
-        #analizamos la gramatica de los datos ingresados
-        resultado_sintactico = prueba_sintactica(datos)
-        cadena = ''
+        if not codigo:
+            QMessageBox.warning(self, "Advertencia", "No hay código para analizar.")
+            return
 
-        #Armanos la cadena a mostrar
-        for item in resultado_sintactico:
-            cadena += item + "\n"
-        # mostramos en pantalla
-        self.home.tx_sintactico.setText( cadena )
+        # Realizar el análisis sintáctico
+        try:
+            resultados = prueba_sintactica(codigo)
+
+            # Mostrar los resultados
+            html_output = "<html><body style='color:#DCDCDC; font-family: Consolas, monospace;'>"
+
+            for item in resultados:
+                if "Error" in item:
+                    html_output += f"<p style='color:#FF6B68;'>{item}</p>"
+                else:
+                    html_output += f"<p>{item}</p>"
+
+            html_output += "</body></html>"
+            self.home.tx_sintactico.setHtml(html_output)
+
+            # Mostrar mensaje en la barra de estado
+            if any("Error" in item for item in resultados):
+                self.home.estado.showMessage("Análisis sintáctico completado con errores")
+            else:
+                self.home.estado.showMessage("Análisis sintáctico completado correctamente")
+
+            # Cambiar a la pestaña de análisis sintáctico
+            self.home.analysisTabs.setCurrentIndex(1)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error durante el análisis sintáctico: {str(e)}")
+            self.home.estado.showMessage(f"Error: {str(e)}")
 
     def ev_archivo(self):
-        '''
-        Manejo de subir archivo 
-        :return: 
-        '''
-        dlg = QFileDialog()
+        """
+        Manejo de carga de archivos
+        """
+        opciones = QFileDialog.Options()
+        nombre_archivo, _ = QFileDialog.getOpenFileName(
+            self,
+            "Abrir Archivo Java",
+            "",
+            "Archivos Java (*.java);;Todos los archivos (*)",
+            options=opciones
+        )
 
-        if dlg.exec_():
-            filenames = dlg.selectedFiles()
-            f = open(filenames[0], 'r')
+        if nombre_archivo:
+            try:
+                with open(nombre_archivo, 'r', encoding='utf-8') as archivo:
+                    contenido = archivo.read()
+                    self.home.tx_ingreso.setText(contenido)
 
-            with f:
-                data = f.read().strip()
-                if data:
-                    self.home.tx_ingreso.setText(data+"\n")
+                # Mostrar el nombre del archivo en la barra de estado
+                nombre_base = os.path.basename(nombre_archivo)
+                self.home.estado.showMessage(f"Archivo cargado: {nombre_base}")
+
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"No se pudo abrir el archivo: {str(e)}")
 
     def ev_limpiar(self):
-        '''
-        Manejo de limpieza de campos
-        :return: 
-        '''
-        self.home.tx_ingreso.setText('')
-        self.home.tx_lexico.setText('')
-        self.home.tx_sintactico.setText('')
-
-
+        """
+        Limpiar todos los campos
+        """
+        self.home.tx_ingreso.clear()
+        self.home.tb_lexico.setRowCount(0)
+        self.home.tx_sintactico.clear()
+        self.home.estado.showMessage("Todos los campos han sido limpiados")
 
 
 def iniciar():
-    # Instaciamos nuestro app por defecto esto no cambia
+    # Instanciar la aplicación
     app = QApplication(sys.argv)
 
-    # Instaciomos nuestro ventana
+    # Crear y mostrar la ventana principal
     ventana = Main()
-    # Mostramos nuestra app
     ventana.show()
 
-    #Controlamos el cierre de la app
+    # Ejecutar el loop de eventos
     sys.exit(app.exec_())
 
 
