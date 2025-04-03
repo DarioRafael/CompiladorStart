@@ -164,11 +164,10 @@ class Main(QMainWindow):
         """
         Manejo del análisis léxico
         """
-        # Limpiar la tabla
         self.home.tb_lexico.setRowCount(0)
-
-        # Obtener el código fuente
         codigo = self.home.tx_ingreso.toPlainText().strip()
+
+
 
         if not codigo:
             QMessageBox.warning(self, "Advertencia", "No hay código para analizar.")
@@ -176,6 +175,8 @@ class Main(QMainWindow):
 
         # Realizar el análisis léxico
         try:
+            from analizador_lexico import prueba, tabla_simbolos
+            tabla_simbolos.limpiar()
             resultados = prueba(codigo)
 
             # Llenar la tabla con los resultados
@@ -312,6 +313,9 @@ class Main(QMainWindow):
 
         # Realizar el análisis sintáctico
         try:
+            from analizador_sintactico import prueba_sintactica
+            from analizador_lexico import tabla_simbolos
+            tabla_simbolos.limpiar()
             resultados = prueba_sintactica(codigo)
 
             # Mostrar los resultados

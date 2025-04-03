@@ -281,6 +281,7 @@ def t_ENTERO(t):
     return t
 
 
+
 # Identificadores y palabras reservadas
 def t_IDENTIFICADOR(t):
     r'[a-zA-Z_][a-zA-Z_0-9]*'
@@ -373,9 +374,9 @@ def t_error(t):
 def prueba(data):
     global resultado_lexema
     global estados
-
-    # Reiniciar el analizador léxico y los estados
     analizador = lex.lex()
+    analizador.lineno = 1
+
     analizador.input(data)
 
     # Reiniciar estados y resultados
@@ -418,7 +419,8 @@ def prueba(data):
 
 
 # Inicializar el analizador léxico
-analizador = lex.lex()
+def construir_lexer():
+    return lex.lex()
 
 if __name__ == '__main__':
     while True:

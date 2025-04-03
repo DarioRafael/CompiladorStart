@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from PyQt5 import QtCore, QtGui, QtWidgets
+from .line_numbered_textedit import CodeEditor  # Import the new CodeEditor
 
 
 class Ui_home(object):
@@ -140,7 +141,10 @@ class Ui_home(object):
 
         self.sourceLayout = QtWidgets.QVBoxLayout(self.sourceGroup)
 
-        self.tx_ingreso = QtWidgets.QTextEdit()
+        #self.tx_ingreso = QtWidgets.QTextEdit()
+        self.tx_ingreso = CodeEditor()
+
+
         self.tx_ingreso.setPlaceholderText("Escribe tu código Java aquí o carga un archivo...")
         self.tx_ingreso.setLineWrapMode(QtWidgets.QTextEdit.NoWrap)
         self.tx_ingreso.setTabStopWidth(40)  # 4 espacios para tabs

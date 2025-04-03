@@ -1,5 +1,8 @@
 import ply.yacc as yacc
-from analizador_lexico import tokens, analizador, tabla_simbolos
+from analizador_lexico import tokens, tabla_simbolos
+from analizador_lexico import construir_lexer
+
+import ply.lex as lex  # Añade esta línea
 
 # Resultado del análisis
 resultado_gramatica = []
@@ -369,12 +372,12 @@ def p_expresion_primaria(p):
                           | IDENTIFICADOR PUNTO IDENTIFICADOR'''
     # Verificar solo si es un identificador simple, no una cadena o un literal
     if isinstance(p[1], str) and p[1] not in ['true', 'false', 'null'] and not isinstance(p[1], (int, float)):
-        # Asegurarse de que no es una cadena entre comillas
-        if not (p[1].startswith('"') and p[1].endswith('"')) and not (p[1].startswith("'") and p[1].endswith("'")):
+        # Mejor comprobación para cadenas - verificar si el valor es una cadena ya tokenizada
+        if p.slice[1].type == 'IDENTIFICADOR':
             nombre = p[1]
             if not tabla_simbolos.existe(nombre):
                 # Solo reportar error si es realmente un identificador y no está declarado
-                if nombre != '+' and not nombre.startswith('"') and not nombre.startswith("'"):
+                if nombre != '+' and p.slice[1].type == 'IDENTIFICADOR':
                     resultado_gramatica.append(f"Error en línea {p.lineno(1)}: Variable '{nombre}' no declarada")
             else:
                 tabla_simbolos.marcar_como_usado(nombre)
@@ -436,7 +439,17 @@ parser = yacc.yacc()
 # Función para analizar un código fuente completo
 def prueba_sintactica(data):
     global resultado_gramatica
+
+    # Crear una nueva instancia del lexer
+    lexer = construir_lexer()
+    lexer.lineno = 1  # Reiniciar contador de líneas
+
+    # Crear una nueva instancia del parser con el lexer
+    parser = yacc.yacc()
+
+    # Limpiar resultados anteriores
     resultado_gramatica.clear()
+    tabla_simbolos.limpiar()
 
     if not data.strip():
         resultado_gramatica.append("No hay código para analizar")
@@ -513,7 +526,7 @@ def prueba_sintactica(data):
                             f"Advertencia en línea {i + 1}: Posible uso de variable no declarada en System.out.print: {contenido}")
 
         # Analizar el código
-        result = parser.parse(data)
+        result = parser.parse(data, lexer=lexer)  # Pasar el lexer explícitamente
         if result:
             resultado_gramatica.append(result)
 
