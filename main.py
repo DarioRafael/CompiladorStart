@@ -9,7 +9,7 @@ from PyQt5.QtCore import QRegExp
 
 # Importar nuestros componentes
 from vista.home import Ui_home
-from analizador_lexico import prueba
+from analizador_lexico import prueba, tabla_simbolos
 from analizador_sintactico import prueba_sintactica
 
 
@@ -149,6 +149,7 @@ class Main(QMainWindow):
         self.home.bt_sintactico.clicked.connect(self.ev_sintactico)
         self.home.bt_archivo.clicked.connect(self.ev_archivo)
         self.home.bt_limpiar.clicked.connect(self.ev_limpiar)
+        self.home.bt_simbolos.clicked.connect(self.mostrar_tabla_simbolos)
 
         # Conectar atajos de teclado
         self.home.shortcut_run_lexical.activated.connect(self.ev_lexico)
@@ -158,12 +159,6 @@ class Main(QMainWindow):
 
         # Mostrar información de la aplicación
         self.home.estado.showMessage("Analizador de código Java - Desarrollado con PyQt5 y PLY")
-
-    # Modifica la función ev_lexico en tu archivo main.py
-    # Reemplaza el código existente de creación de ítems para la tabla por este:
-
-    # Modifica la función ev_lexico en tu archivo main.py
-    # Reemplaza el código existente de creación de ítems para la tabla por este:
 
     def ev_lexico(self):
         """
@@ -195,62 +190,44 @@ class Main(QMainWindow):
                     color_fondo = QColor("#1E1E1E")  # Fondo oscuro para filas impares
                     color_texto = QColor("#FFFFFF")  # Texto blanco para fondo oscuro
                 else:
-                    color_fondo = QColor("#FFFFFF")  # Fondo blanco para filas pares
-                    color_texto = QColor("#FFFFFF")  # Texto negro para fondo blanco
+                    color_fondo = QColor("#2D2D2D")  # Fondo ligeramente más claro para filas pares
+                    color_texto = QColor("#FFFFFF")  # Texto blanco para fondo claro
 
                 usar_fondo_oscuro = not usar_fondo_oscuro  # Alternar para siguiente fila
 
-                # Si el resultado tiene el formato antiguo (cadena), manejarlo adecuadamente
-                if isinstance(token, str):
-                    partes = token.split()
-                    if len(partes) >= 6:  # Asegurarse de que hay suficientes partes
-                        linea = partes[1]
-                        tipo = partes[3]
-                        valor = partes[5]
-                        posicion = partes[7] if len(partes) >= 8 else "0"
-                    else:
-                        # Si no se puede dividir, usar valores por defecto
-                        linea = "0"
-                        tipo = "DESCONOCIDO"
-                        valor = token
-                        posicion = "0"
+                # Formato nuevo (diccionario)
+                linea = str(token.get("linea", "0"))
+                tipo = token.get("tipo", "DESCONOCIDO")
+                valor = str(token.get("valor", ""))
+                lexema = valor  # El lexema es el valor del token
+                patron = self.obtener_patron(tipo)  # Obtener el patrón basado en el tipo
 
-                    if "Error" in token or "no valido" in token:
-                        color_fondo = QColor("#7E2D40")  # Fondo rojo para errores
-                        color_texto = QColor("#FFFFFF")  # Texto blanco para errores
-                else:
-                    # Formato nuevo (diccionario)
-                    linea = str(token.get("linea", "0"))
-                    tipo = token.get("tipo", "DESCONOCIDO")
-                    valor = str(token.get("valor", ""))
-                    posicion = str(token.get("posicion", "0"))
-
-                    if tipo == "ERROR":
-                        color_fondo = QColor("#7E2D40")  # Fondo rojo para errores
-                        color_texto = QColor("#FFFFFF")  # Texto blanco para errores
+                if tipo == "ERROR":
+                    color_fondo = QColor("#7E2D40")  # Fondo rojo para errores
+                    color_texto = QColor("#FFFFFF")  # Texto blanco para errores
 
                 # Crear items para la tabla
                 item_linea = QTableWidgetItem(linea)
                 item_tipo = QTableWidgetItem(tipo)
-                item_valor = QTableWidgetItem(valor)
-                item_posicion = QTableWidgetItem(posicion)
+                item_lexema = QTableWidgetItem(lexema)
+                item_patron = QTableWidgetItem(patron)
 
                 # Aplicar colores
                 item_linea.setBackground(color_fondo)
                 item_tipo.setBackground(color_fondo)
-                item_valor.setBackground(color_fondo)
-                item_posicion.setBackground(color_fondo)
+                item_lexema.setBackground(color_fondo)
+                item_patron.setBackground(color_fondo)
 
                 item_linea.setForeground(color_texto)
                 item_tipo.setForeground(color_texto)
-                item_valor.setForeground(color_texto)
-                item_posicion.setForeground(color_texto)
+                item_lexema.setForeground(color_texto)
+                item_patron.setForeground(color_texto)
 
                 # Agregar a la tabla
                 self.home.tb_lexico.setItem(i, 0, item_linea)
                 self.home.tb_lexico.setItem(i, 1, item_tipo)
-                self.home.tb_lexico.setItem(i, 2, item_valor)
-                self.home.tb_lexico.setItem(i, 3, item_posicion)
+                self.home.tb_lexico.setItem(i, 2, item_lexema)
+                self.home.tb_lexico.setItem(i, 3, item_patron)
 
             # Desactivar el color alternante de filas nativo
             self.home.tb_lexico.setAlternatingRowColors(False)
@@ -267,6 +244,57 @@ class Main(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error durante el análisis léxico: {str(e)}")
             self.home.estado.showMessage(f"Error: {str(e)}")
+
+    def obtener_patron(self, tipo):
+        """
+        Devuelve el patrón de expresión regular correspondiente al tipo de token
+        """
+        patrones = {
+            "IDENTIFICADOR": r'[a-zA-Z_][a-zA-Z_0-9]*',
+            "ENTERO": r'\d+',
+            "DECIMAL": r'\d+\.\d+',
+            "CADENA": r'"[^"]*"',
+            "CARACTER": r"'[^']'",
+            "SUMA": r'\+',
+            "RESTA": r'-',
+            "MULT": r'\*',
+            "DIV": r'/',
+            "MODULO": r'%',
+            "INCREMENTO": r'\+\+',
+            "DECREMENTO": r'--',
+            "ASIGNAR": r'=',
+            "IGUAL": r'==',
+            "MENORQUE": r'<',
+            "MAYORQUE": r'>',
+            "MENORIGUAL": r'<=',
+            "MAYORIGUAL": r'>=',
+            "DISTINTO": r'!=',
+            "AND": r'&&',
+            "OR": r'\|\|',
+            "NOT": r'!',
+            "PARIZQ": r'\(',
+            "PARDER": r'\)',
+            "LLAIZQ": r'{',
+            "LLADER": r'}',
+            "CORIZQ": r'\[',
+            "CORDER": r'\]',
+            "PUNTOCOMA": r';',
+            "COMA": r',',
+            "PUNTO": r'\.'
+        }
+
+        # Palabras reservadas
+        palabras_reservadas = [
+            "CLASS", "PUBLIC", "PRIVATE", "PROTECTED", "STATIC", "FINAL",
+            "VOID", "INT", "FLOAT", "DOUBLE", "BOOLEAN", "CHAR", "STRING",
+            "IF", "ELSE", "FOR", "WHILE", "DO", "SWITCH", "CASE", "DEFAULT",
+            "BREAK", "CONTINUE", "RETURN", "SYSTEM", "OUT", "PRINTLN", "PRINT"
+        ]
+
+        if tipo in palabras_reservadas:
+            return "Palabra reservada"
+
+        return patrones.get(tipo, "Desconocido")
 
     def ev_sintactico(self):
         """
@@ -292,6 +320,8 @@ class Main(QMainWindow):
             for item in resultados:
                 if "Error" in item:
                     html_output += f"<p style='color:#FF6B68;'>{item}</p>"
+                elif "Advertencia" in item:
+                    html_output += f"<p style='color:#FFA500;'>{item}</p>"
                 else:
                     html_output += f"<p>{item}</p>"
 
@@ -310,6 +340,76 @@ class Main(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error durante el análisis sintáctico: {str(e)}")
             self.home.estado.showMessage(f"Error: {str(e)}")
+
+    def mostrar_tabla_simbolos(self):
+        """
+        Muestra la tabla de símbolos actual
+        """
+        # Limpiar la tabla
+        self.home.tb_simbolos.setRowCount(0)
+
+        # Desactivar colores alternantes
+        self.home.tb_simbolos.setAlternatingRowColors(False)
+
+        # Obtener la tabla de símbolos actual
+        simbolos = tabla_simbolos.obtener_todos()
+
+        if not simbolos:
+            self.home.estado.showMessage("No hay símbolos definidos en la tabla de símbolos")
+            return
+
+        # Llenar la tabla con los símbolos
+        self.home.tb_simbolos.setRowCount(len(simbolos))
+
+        for i, (nombre, info) in enumerate(simbolos.items()):
+            # Usar fondo blanco para todas las celdas
+            color_fondo = QColor("#FFFFFF")  # Blanco para todas las celdas
+            color_texto = QColor("#FFFFFF")  # Texto negro
+
+            # Crear items para cada columna
+            item_nombre = QTableWidgetItem(nombre)
+            item_tipo = QTableWidgetItem(info.get("tipo", ""))
+            item_valor = QTableWidgetItem(str(info.get("valor", "")))
+            item_linea = QTableWidgetItem(str(info.get("linea", "")))
+            item_alcance = QTableWidgetItem(info.get("alcance", "global"))
+
+            # Aplicar colores y formato negrita
+            item_nombre.setBackground(color_fondo)
+            item_tipo.setBackground(color_fondo)
+            item_valor.setBackground(color_fondo)
+            item_linea.setBackground(color_fondo)
+            item_alcance.setBackground(color_fondo)
+
+            item_nombre.setForeground(color_texto)
+            item_tipo.setForeground(color_texto)
+            item_valor.setForeground(color_texto)
+            item_linea.setForeground(color_texto)
+            item_alcance.setForeground(color_texto)
+
+            # Aplicar formato negrita
+            font = item_nombre.font()
+            font.setBold(True)
+            item_nombre.setFont(font)
+            item_tipo.setFont(font)
+            item_valor.setFont(font)
+            item_linea.setFont(font)
+            item_alcance.setFont(font)
+
+            # Agregar a la tabla
+            self.home.tb_simbolos.setItem(i, 0, item_nombre)
+            self.home.tb_simbolos.setItem(i, 1, item_tipo)
+            self.home.tb_simbolos.setItem(i, 2, item_valor)
+            self.home.tb_simbolos.setItem(i, 3, item_linea)
+            self.home.tb_simbolos.setItem(i, 4, item_alcance)
+
+        # Ajustar tamaño de las columnas
+        self.home.tb_simbolos.resizeColumnsToContents()
+
+        # Mostrar mensaje en la barra de estado
+        self.home.estado.showMessage(f"Tabla de símbolos: {len(simbolos)} símbolos encontrados")
+
+        # Cambiar a la pestaña de la tabla de símbolos
+        self.home.analysisTabs.setCurrentIndex(2)
 
     def ev_archivo(self):
         """
@@ -344,6 +444,8 @@ class Main(QMainWindow):
         self.home.tx_ingreso.clear()
         self.home.tb_lexico.setRowCount(0)
         self.home.tx_sintactico.clear()
+        self.home.tb_simbolos.setRowCount(0)
+        tabla_simbolos.limpiar()  # Limpiar la tabla de símbolos
         self.home.estado.showMessage("Todos los campos han sido limpiados")
 
 

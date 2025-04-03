@@ -187,11 +187,11 @@ class Ui_home(object):
         # Usar tabla en lugar de textEdit para el análisis léxico
         self.tb_lexico = QtWidgets.QTableWidget()
         self.tb_lexico.setColumnCount(4)
-        self.tb_lexico.setHorizontalHeaderLabels(["Línea", "Tipo", "Valor", "Posición"])
+        self.tb_lexico.setHorizontalHeaderLabels(["Línea", "Componente Léxico", "Lexema", "Patrón"])
         self.tb_lexico.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
         self.tb_lexico.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.Stretch)
         self.tb_lexico.horizontalHeader().setSectionResizeMode(2, QtWidgets.QHeaderView.Stretch)
-        self.tb_lexico.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.ResizeToContents)
+        self.tb_lexico.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.Stretch)
         self.tb_lexico.verticalHeader().setVisible(False)
         self.tb_lexico.setAlternatingRowColors(True)
         self.tb_lexico.setEditTriggers(QtWidgets.QTableWidget.NoEditTriggers)
@@ -208,6 +208,24 @@ class Ui_home(object):
         self.tx_sintactico.setReadOnly(True)
         self.syntaxLayout.addWidget(self.tx_sintactico)
         self.analysisTabs.addTab(self.syntaxTab, "Análisis Sintáctico")
+
+        # Pestaña de tabla de símbolos
+        self.symbolsTab = QtWidgets.QWidget()
+        self.symbolsLayout = QtWidgets.QVBoxLayout(self.symbolsTab)
+        self.tb_simbolos = QtWidgets.QTableWidget()
+        self.tb_simbolos.setColumnCount(5)
+        self.tb_simbolos.setHorizontalHeaderLabels(["Nombre", "Tipo", "Valor", "Línea", "Alcance"])
+        self.tb_simbolos.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
+        self.tb_simbolos.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
+        self.tb_simbolos.horizontalHeader().setSectionResizeMode(2, QtWidgets.QHeaderView.ResizeToContents)
+        self.tb_simbolos.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.ResizeToContents)
+        self.tb_simbolos.horizontalHeader().setSectionResizeMode(4, QtWidgets.QHeaderView.ResizeToContents)
+        self.tb_simbolos.verticalHeader().setVisible(False)
+        self.tb_simbolos.setAlternatingRowColors(True)
+        self.tb_simbolos.setEditTriggers(QtWidgets.QTableWidget.NoEditTriggers)
+        self.tb_simbolos.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.symbolsLayout.addWidget(self.tb_simbolos)
+        self.analysisTabs.addTab(self.symbolsTab, "Tabla de Símbolos")
 
         self.mainLayout.addWidget(self.analysisTabs)
 
@@ -239,8 +257,21 @@ class Ui_home(object):
             }
         """)
 
+        self.bt_simbolos = QtWidgets.QPushButton("Ver Tabla Símbolos")
+        self.bt_simbolos.setIcon(QtGui.QIcon.fromTheme("x-office-spreadsheet"))
+        self.bt_simbolos.setStyleSheet("""
+            QPushButton {
+                background-color: #5F9EA0;
+                border-color: #70AEB0;
+            }
+            QPushButton:hover {
+                background-color: #70AEB0;
+            }
+        """)
+
         self.bottomControls.addWidget(self.bt_lexico)
         self.bottomControls.addWidget(self.bt_sintactico)
+        self.bottomControls.addWidget(self.bt_simbolos)
         self.bottomControls.addStretch()
 
         self.mainLayout.addLayout(self.bottomControls)
@@ -275,10 +306,13 @@ class Ui_home(object):
         home.setWindowTitle(_translate("home", "Analizador de Código Java"))
         self.analysisTabs.setTabText(0, _translate("home", "Análisis Léxico"))
         self.analysisTabs.setTabText(1, _translate("home", "Análisis Sintáctico"))
+        self.analysisTabs.setTabText(2, _translate("home", "Tabla de Símbolos"))
         self.bt_lexico.setText(_translate("home", "Analizar Léxico"))
         self.bt_lexico.setToolTip(_translate("home", "Realizar análisis léxico (F5)"))
         self.bt_sintactico.setText(_translate("home", "Analizar Sintaxis"))
         self.bt_sintactico.setToolTip(_translate("home", "Realizar análisis sintáctico (F6)"))
+        self.bt_simbolos.setText(_translate("home", "Ver Tabla Símbolos"))
+        self.bt_simbolos.setToolTip(_translate("home", "Mostrar tabla de símbolos"))
         self.bt_archivo.setText(_translate("home", "Cargar Archivo"))
         self.bt_archivo.setToolTip(_translate("home", "Abrir un archivo Java (Ctrl+O)"))
         self.bt_limpiar.setText(_translate("home", "Limpiar"))
