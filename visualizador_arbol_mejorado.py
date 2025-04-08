@@ -50,35 +50,7 @@ def generar_arbol_detallado(nodo_original):
         )
 
         # Agregar metadatos según el tipo de nodo
-        if nodo_orig.tipo == "declaracion_clase":
-            # Extraer nombre de la clase y modificadores si están disponibles
-            if nodo_orig.valor:
-                partes = nodo_orig.valor.split()
-                if len(partes) >= 2:
-                    modifiers = partes[:-1]  # Todo excepto el último elemento
-                    class_name = partes[-1]  # Último elemento
-                    nodo_detallado.agregar_detalle("nombre_clase", class_name)
-                    nodo_detallado.agregar_detalle("modificadores", " ".join(modifiers))
-
-        elif nodo_orig.tipo == "metodo":
-            # Extraer detalles del método
-            if nodo_orig.valor:
-                partes = nodo_orig.valor.split()
-                if len(partes) >= 3:  # public static void main(String[] args)
-                    return_type = partes[-2]
-                    method_name = partes[-1].split("(")[0]
-                    modifiers = partes[:-2]
-                    nodo_detallado.agregar_detalle("nombre_metodo", method_name)
-                    nodo_detallado.agregar_detalle("tipo_retorno", return_type)
-                    nodo_detallado.agregar_detalle("modificadores", " ".join(modifiers))
-
-                    # Extraer parámetros
-                    params_match = re.search(r'\((.*?)\)', nodo_orig.valor)
-                    if params_match:
-                        params = params_match.group(1)
-                        nodo_detallado.agregar_detalle("parametros", params)
-
-        elif nodo_orig.tipo == "if":
+        if nodo_orig.tipo == "if":
             # Para sentencias if, extraer la condición
             if nodo_orig.valor and "(" in nodo_orig.valor and ")" in nodo_orig.valor:
                 condicion = nodo_orig.valor.split("(")[1].split(")")[0]
@@ -113,15 +85,6 @@ def generar_arbol_detallado(nodo_original):
                     # Agregar operando derecho
                     nodo_condicion.agregar_hijo(NodoArbolDetallado("operando_derecho", der, nodo_orig.linea))
 
-                # Procesamiento de otras comparaciones (<=, >=, <, >, !=)
-                elif "<=" in condicion:
-                    partes = condicion.split("<=")
-                    nodo_condicion.agregar_hijo(
-                        NodoArbolDetallado("operando_izquierdo", partes[0].strip(), nodo_orig.linea))
-                    nodo_condicion.agregar_hijo(NodoArbolDetallado("operador", "<=", nodo_orig.linea))
-                    nodo_condicion.agregar_hijo(
-                        NodoArbolDetallado("operando_derecho", partes[1].strip(), nodo_orig.linea))
-
                 # Buscar hijos originales del if para crear bloque if y else
                 bloques_creados = False
                 for hijo in nodo_orig.hijos:
@@ -144,43 +107,6 @@ def generar_arbol_detallado(nodo_original):
 
                 return nodo_detallado
 
-        elif nodo_orig.tipo == "for":
-            # Procesar bucle for con más detalle
-            if nodo_orig.valor and "(" in nodo_orig.valor and ")" in nodo_orig.valor:
-                partes_for = nodo_orig.valor.split("(")[1].split(")")[0].split(";")
-
-                if len(partes_for) == 3:
-                    # Extraer las tres partes del bucle for
-                    inicializacion = partes_for[0].strip()
-                    condicion = partes_for[1].strip()
-                    incremento = partes_for[2].strip()
-
-                    # Crear nodos hijos para cada parte
-                    nodo_detallado.agregar_hijo(NodoArbolDetallado("inicializacion", inicializacion, nodo_orig.linea))
-
-                    # Analizar la condición del bucle
-                    nodo_condicion = NodoArbolDetallado("condicion", condicion, nodo_orig.linea)
-                    nodo_detallado.agregar_hijo(nodo_condicion)
-
-                    if "<=" in condicion:
-                        partes = condicion.split("<=")
-                        nodo_condicion.agregar_hijo(
-                            NodoArbolDetallado("operando_izquierdo", partes[0].strip(), nodo_orig.linea))
-                        nodo_condicion.agregar_hijo(NodoArbolDetallado("operador", "<=", nodo_orig.linea))
-                        nodo_condicion.agregar_hijo(
-                            NodoArbolDetallado("operando_derecho", partes[1].strip(), nodo_orig.linea))
-
-                    nodo_detallado.agregar_hijo(NodoArbolDetallado("incremento", incremento, nodo_orig.linea))
-
-                    # Agregar cuerpo del bucle
-                    nodo_cuerpo = NodoArbolDetallado("cuerpo_for", None, nodo_orig.linea)
-                    nodo_detallado.agregar_hijo(nodo_cuerpo)
-
-                    for hijo in nodo_orig.hijos:
-                        nodo_cuerpo.agregar_hijo(_procesar_nodo(hijo))
-
-                    return nodo_detallado
-
         elif nodo_orig.tipo == "llamada":
             # Para llamadas a métodos, extraer información detallada
             if "System.out.println" in nodo_orig.valor:
@@ -192,20 +118,6 @@ def generar_arbol_detallado(nodo_original):
                     # Extraer argumento entre paréntesis
                     arg_texto = partes[1].split(")")[0]
                     argumento = NodoArbolDetallado("argumento", arg_texto, nodo_orig.linea)
-
-                    # Si hay concatenación de cadenas, analizarla
-                    if "+" in arg_texto:
-                        partes_arg = arg_texto.split("+")
-                        for i, parte in enumerate(partes_arg):
-                            parte = parte.strip()
-                            tipo_arg = "literal_string" if parte.startswith("\"") and parte.endswith(
-                                "\"") else "variable"
-                            nodo_arg = NodoArbolDetallado(tipo_arg, parte, nodo_orig.linea)
-                            argumento.agregar_hijo(nodo_arg)
-
-                            # Agregar nodo de concatenación entre partes, excepto después de la última
-                            if i < len(partes_arg) - 1:
-                                argumento.agregar_hijo(NodoArbolDetallado("operador", "+", nodo_orig.linea))
 
                     nodo_detallado.agregar_hijo(objeto)
                     nodo_detallado.agregar_hijo(metodo)
@@ -227,56 +139,6 @@ def generar_arbol_detallado(nodo_original):
                     nodo_detallado.agregar_detalle("tipo", tipo)
                     nodo_detallado.agregar_detalle("nombre", nombre)
                     nodo_detallado.agregar_detalle("valor_inicial", valor)
-
-                    # Crear nodos hijos para tipo, nombre y valor
-                    nodo_detallado.agregar_hijo(NodoArbolDetallado("tipo_dato", tipo, nodo_orig.linea))
-                    nodo_detallado.agregar_hijo(NodoArbolDetallado("identificador", nombre, nodo_orig.linea))
-                    nodo_detallado.agregar_hijo(NodoArbolDetallado("valor", valor, nodo_orig.linea))
-
-                    return nodo_detallado
-            else:
-                # Declaración sin inicialización
-                decl = nodo_orig.valor.strip().split()
-                if len(decl) >= 2:
-                    tipo = decl[0]
-                    nombre = decl[1]
-
-                    nodo_detallado.agregar_detalle("tipo", tipo)
-                    nodo_detallado.agregar_detalle("nombre", nombre)
-
-                    nodo_detallado.agregar_hijo(NodoArbolDetallado("tipo_dato", tipo, nodo_orig.linea))
-                    nodo_detallado.agregar_hijo(NodoArbolDetallado("identificador", nombre, nodo_orig.linea))
-
-        elif nodo_orig.tipo == "asignacion":
-            # Para asignaciones, extraer variable y expresión
-            if "=" in nodo_orig.valor:
-                partes = nodo_orig.valor.split("=")
-                variable = partes[0].strip()
-                expresion = partes[1].strip()
-
-                nodo_detallado.agregar_hijo(NodoArbolDetallado("variable", variable, nodo_orig.linea))
-                nodo_detallado.agregar_hijo(NodoArbolDetallado("operador", "=", nodo_orig.linea))
-
-                # Procesar la expresión a la derecha del igual
-                if "*=" in nodo_orig.valor:
-                    # Caso especial para factorial *= i
-                    partes = nodo_orig.valor.split("*=")
-                    variable = partes[0].strip()
-                    valor = partes[1].strip()
-
-                    nodo_detallado.valor = f"{variable} *= {valor}"
-                    nodo_detallado.agregar_hijo(NodoArbolDetallado("variable", variable, nodo_orig.linea))
-                    nodo_detallado.agregar_hijo(NodoArbolDetallado("operador", "*=", nodo_orig.linea))
-                    nodo_detallado.agregar_hijo(NodoArbolDetallado("valor", valor, nodo_orig.linea))
-
-                    # Expandir para mostrar la operación equivalente: factorial = factorial * i
-                    nodo_expansion = NodoArbolDetallado("expansion", f"{variable} = {variable} * {valor}",
-                                                        nodo_orig.linea)
-                    nodo_detallado.agregar_hijo(nodo_expansion)
-
-                    return nodo_detallado
-                else:
-                    nodo_detallado.agregar_hijo(NodoArbolDetallado("expresion", expresion, nodo_orig.linea))
 
         # Proceso general para otros tipos de nodos
         for hijo in nodo_orig.hijos:
@@ -338,23 +200,11 @@ def generar_arbol_qt_mejorado(nodo, parent_item=None, tree_widget=None):
         item.setForeground(0, QBrush(QColor('#9CDCFE')))  # Azul claro
     elif nodo.tipo == "declaracion":
         item.setForeground(0, QBrush(QColor('#DCDCAA')))  # Amarillo
-    elif nodo.tipo == "inicializacion":
-        item.setForeground(0, QBrush(QColor('#DCDCAA')))  # Amarillo
-    elif nodo.tipo == "tipo_dato":
-        item.setForeground(0, QBrush(QColor('#569CD6')))  # Azul
-    elif nodo.tipo == "identificador":
-        item.setForeground(0, QBrush(QColor('#9CDCFE')))  # Azul claro
     elif nodo.tipo == "if":
         item.setFont(0, QFont("Consolas", 10, QFont.Bold))
         item.setForeground(0, QBrush(QColor('#C586C0')))  # Morado
     elif nodo.tipo == "for" or nodo.tipo == "while":
         item.setForeground(0, QBrush(QColor('#C586C0')))  # Morado
-        item.setFont(0, QFont("Consolas", 10, QFont.Bold))
-    elif nodo.tipo == "cuerpo_for":
-        item.setForeground(0, QBrush(QColor('#57A64A')))  # Verde
-        item.setFont(0, QFont("Consolas", 10))
-    elif nodo.tipo == "incremento":
-        item.setForeground(0, QBrush(QColor('#D7BA7D')))  # Amarillo oscuro
     elif nodo.tipo == "llamada":
         item.setForeground(0, QBrush(QColor('#57A64A')))  # Verde
     elif nodo.tipo == "condicion":
@@ -375,18 +225,6 @@ def generar_arbol_qt_mejorado(nodo, parent_item=None, tree_widget=None):
         item.setForeground(0, QBrush(QColor('#4FC1FF')))  # Azul brillante
     elif nodo.tipo == "argumento":
         item.setForeground(0, QBrush(QColor('#CE9178')))  # Rojo claro
-    elif nodo.tipo == "literal_string":
-        item.setForeground(0, QBrush(QColor('#CE9178')))  # Rojo claro
-    elif nodo.tipo == "variable":
-        item.setForeground(0, QBrush(QColor('#9CDCFE')))  # Azul claro
-    elif nodo.tipo == "valor":
-        item.setForeground(0, QBrush(QColor('#B5CEA8')))  # Verde claro
-    elif nodo.tipo == "expansion":
-        item.setForeground(0, QBrush(QColor('#BBBBBB')))  # Gris
-        item.setFont(0, QFont("Consolas", 9, QFont.Italic))
-    elif nodo.tipo == "asignacion":
-        item.setForeground(0, QBrush(QColor('#D7BA7D')))  # Amarillo oscuro
-        item.setFont(0, QFont("Consolas", 10))
 
     # Agregar tooltips con información adicional
     if hasattr(nodo, 'detalles') and nodo.detalles:
