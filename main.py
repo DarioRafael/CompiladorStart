@@ -3,19 +3,22 @@
 
 import sys
 import os
-from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QTableWidgetItem, QMessageBox
-from PyQt5.QtGui import QColor, QSyntaxHighlighter, QTextCharFormat, QBrush, QFont
-from PyQt5.QtCore import QRegExp
-from visualizador_arbol_mejorado import visualizar_arbol_derivacion_mejorado
+import time
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QFileDialog, QTableWidgetItem,
+                             QMessageBox, QSplitter, QHBoxLayout, QWidget, QVBoxLayout,
+                             QLabel, QProgressBar)
+from PyQt5.QtGui import QColor, QSyntaxHighlighter, QTextCharFormat, QBrush, QFont, QIcon
+from PyQt5.QtCore import QRegExp, Qt, QSize, QTimer
 
 # Importar nuestros componentes
 from vista.home import Ui_home
 from analizador_lexico import prueba, tabla_simbolos
 from analizador_sintactico import prueba_sintactica
-from arbol_derivacion import construir_arbol_derivacion, generar_arbol_qt
+from arbol_derivacion import construir_arbol_derivacion
+from visualizador_arbol_mejorado import visualizar_arbol_derivacion_mejorado
 
 
-# Resaltador de sintaxis para Java
+# Resaltador de sintaxis para Java mejorado
 class JavaHighlighter(QSyntaxHighlighter):
     def __init__(self, parent=None):
         super(JavaHighlighter, self).__init__(parent)
@@ -143,6 +146,21 @@ class Main(QMainWindow):
         self.home = Ui_home()
         self.home.setupUi(self)
 
+        # Configurar tema oscuro para la aplicación
+        self.setStyleSheet("""
+            QMainWindow, QWidget { background-color: #1E1E1E; color: #DCDCDC; }
+            QTableWidget { gridline-color: #2D2D30; }
+            QHeaderView::section { background-color: #252526; color: #DCDCDC; }
+            QPushButton { background-color: #0E639C; color: white; border: none; padding: 5px; }
+            QPushButton:hover { background-color: #1177BB; }
+            QPushButton:pressed { background-color: #0A4C7D; }
+            QTabWidget::pane { border: 1px solid #3E3E42; }
+            QTabBar::tab { background-color: #252526; color: #DCDCDC; padding: 6px 10px; }
+            QTabBar::tab:selected { background-color: #0E639C; }
+            QTreeWidget { border: 1px solid #3E3E42; }
+            QTextEdit, QPlainTextEdit { background-color: #1E1E1E; color: #DCDCDC; border: 1px solid #3E3E42; }
+        """)
+
         # Aplicar resaltador de sintaxis de Java
         self.highlighter = JavaHighlighter(self.home.tx_ingreso.document())
 
@@ -152,7 +170,6 @@ class Main(QMainWindow):
         self.home.bt_archivo.clicked.connect(self.ev_archivo)
         self.home.bt_limpiar.clicked.connect(self.ev_limpiar)
         self.home.bt_simbolos.clicked.connect(self.mostrar_tabla_simbolos)
-        # Conectar el nuevo botón para generar árbol
         self.home.bt_arbol.clicked.connect(self.generar_arbol)
 
         # Conectar atajos de teclado
@@ -163,10 +180,60 @@ class Main(QMainWindow):
         self.home.shortcut_tree.activated.connect(self.generar_arbol)
 
         # Mostrar información de la aplicación
-        self.home.estado.showMessage("Analizador de código Java - Desarrollado con PyQt5 y PLY")
+        self.home.estado.showMessage("Analizador de código Java - Listo para analizar")
 
         # Variable para verificar si se ha realizado análisis sintáctico
         self.analisis_sintactico_realizado = False
+
+        # Inicializar una barra de progreso temporal
+        self.progress_bar = None
+
+        # Configurar el árbol para que use todo el espacio disponible
+        self.home.treeWidget.header().setStretchLastSection(True)
+        self.home.treeWidget.setAnimated(True)
+
+        # Mejora visual en tablas
+        self.configurar_tablas()
+
+        # Establecer título de la ventana
+        self.setWindowTitle("Analizador Java - Visualizador de Árboles de Derivación")
+
+    def configurar_tablas(self):
+        """Configura las tablas para mejor visualización"""
+        # Tabla léxica
+        self.home.tb_lexico.setAlternatingRowColors(False)
+        self.home.tb_lexico.horizontalHeader().setStretchLastSection(True)
+        self.home.tb_lexico.verticalHeader().setVisible(False)
+
+        # Tabla de símbolos
+        self.home.tb_simbolos.setAlternatingRowColors(False)
+        self.home.tb_simbolos.horizontalHeader().setStretchLastSection(True)
+        self.home.tb_simbolos.verticalHeader().setVisible(False)
+
+    def mostrar_progreso(self, titulo, duracion=2000):
+        """Muestra una barra de progreso temporal"""
+        # Si ya existe una barra de progreso, la eliminamos
+        if self.progress_bar:
+            # Aquí está el cambio: usar 'estado' en lugar de 'statusbar'
+            self.home.estado.removeWidget(self.progress_bar)
+
+        # Crear nueva barra de progreso
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setMaximum(100)
+        self.progress_bar.setTextVisible(True)
+        self.progress_bar.setFormat(f"{titulo} %p%")
+        self.progress_bar.setValue(0)
+
+        # Añadir a la barra de estado
+        self.home.estado.addWidget(self.progress_bar)
+
+        # Simular progreso con un temporizador
+        for i in range(1, 101):
+            # Convierte explícitamente a entero usando int()
+            QTimer.singleShot(int(i * duracion / 100), lambda val=i: self.progress_bar.setValue(val))
+
+        # Eliminar después de completar
+        QTimer.singleShot(int(duracion + 100), lambda: self.home.estado.removeWidget(self.progress_bar))
 
     def ev_lexico(self):
         """
@@ -179,14 +246,27 @@ class Main(QMainWindow):
             QMessageBox.warning(self, "Advertencia", "No hay código para analizar.")
             return
 
+        # Mostrar barra de progreso
+        self.mostrar_progreso("Análisis léxico en progreso", 1000)
+
         # Realizar el análisis léxico
         try:
-            from analizador_lexico import prueba, tabla_simbolos
+            inicio = time.time()
+
+            # Realizar análisis
             tabla_simbolos.limpiar()
             resultados = prueba(codigo)
 
+            fin = time.time()
+            tiempo_analisis = round((fin - inicio) * 1000, 2)  # en milisegundos
+
             # Llenar la tabla con los resultados
             self.home.tb_lexico.setRowCount(len(resultados))
+
+            # Contadores para estadísticas
+            total_tokens = len(resultados)
+            tokens_por_tipo = {}
+            errores = 0
 
             # Alternar colores para filas
             usar_fondo_oscuro = True
@@ -209,9 +289,16 @@ class Main(QMainWindow):
                 lexema = valor  # El lexema es el valor del token
                 patron = self.obtener_patron(tipo)  # Obtener el patrón basado en el tipo
 
+                # Actualizar estadísticas
+                if tipo in tokens_por_tipo:
+                    tokens_por_tipo[tipo] += 1
+                else:
+                    tokens_por_tipo[tipo] = 1
+
                 if tipo == "ERROR":
                     color_fondo = QColor("#7E2D40")  # Fondo rojo para errores
                     color_texto = QColor("#FFFFFF")  # Texto blanco para errores
+                    errores += 1
 
                 # Crear items para la tabla
                 item_linea = QTableWidgetItem(linea)
@@ -220,15 +307,15 @@ class Main(QMainWindow):
                 item_patron = QTableWidgetItem(patron)
 
                 # Aplicar colores
-                item_linea.setBackground(color_fondo)
-                item_tipo.setBackground(color_fondo)
-                item_lexema.setBackground(color_fondo)
-                item_patron.setBackground(color_fondo)
+                item_linea.setBackground(QBrush(color_fondo))
+                item_tipo.setBackground(QBrush(color_fondo))
+                item_lexema.setBackground(QBrush(color_fondo))
+                item_patron.setBackground(QBrush(color_fondo))
 
-                item_linea.setForeground(color_texto)
-                item_tipo.setForeground(color_texto)
-                item_lexema.setForeground(color_texto)
-                item_patron.setForeground(color_texto)
+                item_linea.setForeground(QBrush(color_texto))
+                item_tipo.setForeground(QBrush(color_texto))
+                item_lexema.setForeground(QBrush(color_texto))
+                item_patron.setForeground(QBrush(color_texto))
 
                 # Agregar a la tabla
                 self.home.tb_lexico.setItem(i, 0, item_linea)
@@ -236,14 +323,14 @@ class Main(QMainWindow):
                 self.home.tb_lexico.setItem(i, 2, item_lexema)
                 self.home.tb_lexico.setItem(i, 3, item_patron)
 
-            # Desactivar el color alternante de filas nativo
-            self.home.tb_lexico.setAlternatingRowColors(False)
-
             # Ajustar tamaño de las columnas
             self.home.tb_lexico.resizeColumnsToContents()
 
             # Mostrar mensaje en la barra de estado
-            self.home.estado.showMessage(f"Análisis léxico completado: {len(resultados)} tokens encontrados")
+            self.home.estado.showMessage(
+                f"Análisis léxico completado: {total_tokens} tokens encontrados | "
+                f"{errores} errores | {tiempo_analisis} ms"
+            )
 
             # Cambiar a la pestaña de análisis léxico
             self.home.analysisTabs.setCurrentIndex(0)
@@ -317,23 +404,33 @@ class Main(QMainWindow):
             QMessageBox.warning(self, "Advertencia", "No hay código para analizar.")
             return
 
+        # Mostrar barra de progreso
+        self.mostrar_progreso("Análisis sintáctico en progreso", 1500)
+
         # Realizar el análisis sintáctico
         try:
-            from analizador_sintactico import prueba_sintactica
-            from analizador_lexico import tabla_simbolos
+            inicio = time.time()
+
             tabla_simbolos.limpiar()
             resultados = prueba_sintactica(codigo)
+
+            fin = time.time()
+            tiempo_analisis = round((fin - inicio) * 1000, 2)  # en milisegundos
 
             # Mostrar los resultados
             html_output = "<html><body style='color:#DCDCDC; font-family: Consolas, monospace;'>"
 
+            # Contar errores y advertencias
+            errores = sum(1 for item in resultados if "Error" in item)
+            advertencias = sum(1 for item in resultados if "Advertencia" in item)
+
             for item in resultados:
                 if "Error" in item:
-                    html_output += f"<p style='color:#FF6B68;'>{item}</p>"
+                    html_output += f"<p style='color:#FF6B68; margin: 5px 0;'>{item}</p>"
                 elif "Advertencia" in item:
-                    html_output += f"<p style='color:#FFA500;'>{item}</p>"
+                    html_output += f"<p style='color:#FFA500; margin: 5px 0;'>{item}</p>"
                 else:
-                    html_output += f"<p>{item}</p>"
+                    html_output += f"<p style='margin: 5px 0;'>{item}</p>"
 
             html_output += "</body></html>"
             self.home.tx_sintactico.setHtml(html_output)
@@ -349,9 +446,15 @@ class Main(QMainWindow):
 
             # Mostrar mensaje en la barra de estado
             if tiene_errores:
-                self.home.estado.showMessage("Análisis sintáctico completado con errores. No se puede generar árbol.")
+                self.home.estado.showMessage(
+                    f"Análisis sintáctico completado con {errores} errores y {advertencias} advertencias | "
+                    f"{tiempo_analisis} ms | No se puede generar árbol."
+                )
             else:
-                self.home.estado.showMessage("Análisis sintáctico completado correctamente. Puede generar el árbol.")
+                self.home.estado.showMessage(
+                    f"Análisis sintáctico completado correctamente | {advertencias} advertencias | "
+                    f"{tiempo_analisis} ms | Puede generar el árbol."
+                )
 
             # Cambiar a la pestaña de análisis sintáctico
             self.home.analysisTabs.setCurrentIndex(1)
@@ -390,18 +493,26 @@ class Main(QMainWindow):
             else:
                 return
 
+        # Mostrar barra de progreso
+        self.mostrar_progreso("Generando árbol de derivación", 2000)
+
         # Limpiar el árbol anterior
         self.home.treeWidget.clear()
 
         # Establecer estilo para el encabezado del árbol
-        self.home.treeWidget.setHeaderLabel("Árbol de Derivación")
+        self.home.treeWidget.setHeaderLabel("Árbol de Derivación Sintáctica")
         header_font = QFont("Consolas", 12, QFont.Bold)
         self.home.treeWidget.headerItem().setFont(0, header_font)
         self.home.treeWidget.headerItem().setForeground(0, QBrush(QColor('#F89406')))  # Naranja
 
         try:
+            inicio = time.time()
+
             # Generar árbol mejorado
             resultado = visualizar_arbol_derivacion_mejorado(codigo, self.home.treeWidget)
+
+            fin = time.time()
+            tiempo_generacion = round((fin - inicio) * 1000, 2)  # en milisegundos
 
             if not resultado:
                 QMessageBox.warning(
@@ -412,11 +523,33 @@ class Main(QMainWindow):
                 )
                 return
 
+            # Contar nodos del árbol
+            def contar_nodos(item, nivel=0):
+                count = 1  # El ítem actual
+                max_nivel = nivel
+                for i in range(item.childCount()):
+                    child_count, child_max_nivel = contar_nodos(item.child(i), nivel + 1)
+                    count += child_count
+                    max_nivel = max(max_nivel, child_max_nivel)
+                return count, max_nivel
+
+            # Contar nodos totales y profundidad máxima
+            total_nodos = 0
+            profundidad_maxima = 0
+            root = self.home.treeWidget.invisibleRootItem()
+            for i in range(root.childCount()):
+                nodos, prof = contar_nodos(root.child(i))
+                total_nodos += nodos
+                profundidad_maxima = max(profundidad_maxima, prof)
+
             # Cambiar a la pestaña del árbol
             self.home.analysisTabs.setCurrentIndex(3)
 
             # Actualizar la barra de estado
-            self.home.estado.showMessage("Árbol de derivación detallado generado correctamente")
+            self.home.estado.showMessage(
+                f"Árbol generado: {total_nodos} nodos | Profundidad: {profundidad_maxima} niveles | "
+                f"Tiempo: {tiempo_generacion} ms"
+            )
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al generar el árbol de derivación: {str(e)}")
@@ -429,9 +562,6 @@ class Main(QMainWindow):
         # Limpiar la tabla
         self.home.tb_simbolos.setRowCount(0)
 
-        # Desactivar colores alternantes
-        self.home.tb_simbolos.setAlternatingRowColors(False)
-
         # Obtener la tabla de símbolos actual
         simbolos = tabla_simbolos.obtener_todos()
 
@@ -443,10 +573,6 @@ class Main(QMainWindow):
         self.home.tb_simbolos.setRowCount(len(simbolos))
 
         for i, (nombre, info) in enumerate(simbolos.items()):
-            # Usar fondo blanco para todas las celdas
-            color_fondo = QColor("#FFFFFF")  # Blanco para todas las celdas
-            color_texto = QColor("#FFFFFF")  # Texto negro
-
             # Crear items para cada columna
             item_nombre = QTableWidgetItem(nombre)
             item_tipo = QTableWidgetItem(info.get("tipo", ""))
@@ -454,27 +580,42 @@ class Main(QMainWindow):
             item_linea = QTableWidgetItem(str(info.get("linea", "")))
             item_alcance = QTableWidgetItem(info.get("alcance", "global"))
 
-            # Aplicar colores y formato negrita
-            item_nombre.setBackground(color_fondo)
-            item_tipo.setBackground(color_fondo)
-            item_valor.setBackground(color_fondo)
-            item_linea.setBackground(color_fondo)
-            item_alcance.setBackground(color_fondo)
+            # Aplicar colores basados en el tipo
+            if info.get("tipo") == "INT":
+                color_fondo = QColor("#143D59")  # Azul oscuro
+            elif info.get("tipo") == "FLOAT" or info.get("tipo") == "DOUBLE":
+                color_fondo = QColor("#1D566E")  # Azul verdoso
+            elif info.get("tipo") == "STRING":
+                color_fondo = QColor("#4B1E3F")  # Púrpura oscuro
+            elif info.get("tipo") == "BOOLEAN":
+                color_fondo = QColor("#2B3A42")  # Gris azulado
+            else:
+                color_fondo = QColor("#2D2D30")  # Gris oscuro predeterminado
 
-            item_nombre.setForeground(color_texto)
-            item_tipo.setForeground(color_texto)
-            item_valor.setForeground(color_texto)
-            item_linea.setForeground(color_texto)
-            item_alcance.setForeground(color_texto)
+            color_texto = QColor("#FFFFFF")  # Texto blanco
+
+            # Aplicar colores y formato negrita
+            item_nombre.setBackground(QBrush(color_fondo))
+            item_tipo.setBackground(QBrush(color_fondo))
+            item_valor.setBackground(QBrush(color_fondo))
+            item_linea.setBackground(QBrush(color_fondo))
+            item_alcance.setBackground(QBrush(color_fondo))
+
+            item_nombre.setForeground(QBrush(color_texto))
+            item_tipo.setForeground(QBrush(color_texto))
+            item_valor.setForeground(QBrush(color_texto))
+            item_linea.setForeground(QBrush(color_texto))
+            item_alcance.setForeground(QBrush(color_texto))
 
             # Aplicar formato negrita
             font = item_nombre.font()
             font.setBold(True)
             item_nombre.setFont(font)
-            item_tipo.setFont(font)
-            item_valor.setFont(font)
-            item_linea.setFont(font)
-            item_alcance.setFont(font)
+
+            # Alinear valores numéricos a la derecha
+            if info.get("tipo") in ["INT", "FLOAT", "DOUBLE"]:
+                item_valor.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                item_linea.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
             # Agregar a la tabla
             self.home.tb_simbolos.setItem(i, 0, item_nombre)
@@ -515,6 +656,9 @@ class Main(QMainWindow):
                 nombre_base = os.path.basename(nombre_archivo)
                 self.home.estado.showMessage(f"Archivo cargado: {nombre_base}")
 
+                # Actualizar el título de la ventana con el nombre del archivo
+                self.setWindowTitle(f"Analizador Java - {nombre_base}")
+
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"No se pudo abrir el archivo: {str(e)}")
 
@@ -532,10 +676,32 @@ class Main(QMainWindow):
         self.analisis_sintactico_realizado = False  # Reiniciar estado
         self.home.bt_arbol.setEnabled(True)  # Restaurar el botón
 
+        # Restaurar título predeterminado
+        self.setWindowTitle("Analizador Java - Visualizador de Árboles de Derivación")
+
 
 def iniciar():
     # Instanciar la aplicación
     app = QApplication(sys.argv)
+
+    # Establecer estilo de la aplicación
+    app.setStyle("Fusion")  # Usar el estilo Fusion que se ve bien en tema oscuro
+
+    # Establecer paleta de colores oscura para toda la aplicación
+    palette = app.palette()
+    palette.setColor(palette.Window, QColor(30, 30, 30))
+    palette.setColor(palette.WindowText, QColor(220, 220, 220))
+    palette.setColor(palette.Base, QColor(15, 15, 15))
+    palette.setColor(palette.AlternateBase, QColor(35, 35, 35))
+    palette.setColor(palette.ToolTipBase, QColor(30, 30, 30))
+    palette.setColor(palette.ToolTipText, QColor(220, 220, 220))
+    palette.setColor(palette.Text, QColor(220, 220, 220))
+    palette.setColor(palette.Button, QColor(53, 53, 53))
+    palette.setColor(palette.ButtonText, QColor(220, 220, 220))
+    palette.setColor(palette.BrightText, QColor(255, 255, 255))
+    palette.setColor(palette.Highlight, QColor(42, 130, 218))
+    palette.setColor(palette.HighlightedText, QColor(0, 0, 0))
+    app.setPalette(palette)
 
     # Crear y mostrar la ventana principal
     ventana = Main()
