@@ -11,6 +11,7 @@ from PyQt5.QtCore import QRegExp
 from vista.home import Ui_home
 from analizador_lexico import prueba, tabla_simbolos
 from analizador_sintactico import prueba_sintactica
+from arbol_derivacion import construir_arbol_derivacion, generar_arbol_qt
 
 
 # Resaltador de sintaxis para Java
@@ -150,15 +151,21 @@ class Main(QMainWindow):
         self.home.bt_archivo.clicked.connect(self.ev_archivo)
         self.home.bt_limpiar.clicked.connect(self.ev_limpiar)
         self.home.bt_simbolos.clicked.connect(self.mostrar_tabla_simbolos)
+        # Conectar el nuevo botón para generar árbol
+        self.home.bt_arbol.clicked.connect(self.generar_arbol)
 
         # Conectar atajos de teclado
         self.home.shortcut_run_lexical.activated.connect(self.ev_lexico)
         self.home.shortcut_run_syntactic.activated.connect(self.ev_sintactico)
         self.home.shortcut_open.activated.connect(self.ev_archivo)
         self.home.shortcut_clear.activated.connect(self.ev_limpiar)
+        self.home.shortcut_tree.activated.connect(self.generar_arbol)
 
         # Mostrar información de la aplicación
         self.home.estado.showMessage("Analizador de código Java - Desarrollado con PyQt5 y PLY")
+
+        # Variable para verificar si se ha realizado análisis sintáctico
+        self.analisis_sintactico_realizado = False
 
     def ev_lexico(self):
         """
@@ -166,8 +173,6 @@ class Main(QMainWindow):
         """
         self.home.tb_lexico.setRowCount(0)
         codigo = self.home.tx_ingreso.toPlainText().strip()
-
-
 
         if not codigo:
             QMessageBox.warning(self, "Advertencia", "No hay código para analizar.")
@@ -332,17 +337,88 @@ class Main(QMainWindow):
             html_output += "</body></html>"
             self.home.tx_sintactico.setHtml(html_output)
 
+            # Verificar si hay errores
+            tiene_errores = any("Error" in item for item in resultados)
+
+            # Establecer el estado para el árbol de derivación
+            self.analisis_sintactico_realizado = not tiene_errores
+
+            # Habilitar o deshabilitar el botón de generar árbol
+            self.home.bt_arbol.setEnabled(self.analisis_sintactico_realizado)
+
             # Mostrar mensaje en la barra de estado
-            if any("Error" in item for item in resultados):
-                self.home.estado.showMessage("Análisis sintáctico completado con errores")
+            if tiene_errores:
+                self.home.estado.showMessage("Análisis sintáctico completado con errores. No se puede generar árbol.")
             else:
-                self.home.estado.showMessage("Análisis sintáctico completado correctamente")
+                self.home.estado.showMessage("Análisis sintáctico completado correctamente. Puede generar el árbol.")
 
             # Cambiar a la pestaña de análisis sintáctico
             self.home.analysisTabs.setCurrentIndex(1)
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error durante el análisis sintáctico: {str(e)}")
+            self.home.estado.showMessage(f"Error: {str(e)}")
+            self.analisis_sintactico_realizado = False
+            self.home.bt_arbol.setEnabled(False)
+
+    def generar_arbol(self):
+        """
+        Genera y muestra el árbol de derivación
+        """
+        # Obtener el código fuente
+        codigo = self.home.tx_ingreso.toPlainText().strip()
+
+        if not codigo:
+            QMessageBox.warning(self, "Advertencia", "No hay código para analizar.")
+            return
+
+        # Verificar si se ha realizado el análisis sintáctico
+        if not self.analisis_sintactico_realizado:
+            respuesta = QMessageBox.question(
+                self,
+                "Realizar análisis sintáctico",
+                "Es necesario realizar un análisis sintáctico antes de generar el árbol. ¿Desea realizar el análisis sintáctico ahora?",
+                QMessageBox.Yes | QMessageBox.No
+            )
+
+            if respuesta == QMessageBox.Yes:
+                self.ev_sintactico()
+                # Si hay errores, no continuamos
+                if not self.analisis_sintactico_realizado:
+                    return
+            else:
+                return
+
+        # Limpiar el árbol anterior
+        self.home.treeWidget.clear()
+
+        try:
+            # Construir el árbol de derivación
+            arbol, resultados = construir_arbol_derivacion(codigo)
+
+            if arbol is None:
+                QMessageBox.warning(
+                    self,
+                    "Error al generar árbol",
+                    "No se pudo generar el árbol de derivación debido a errores sintácticos. " +
+                    "Corrija los errores antes de intentar generar el árbol."
+                )
+                return
+
+            # Generar el árbol visual
+            generar_arbol_qt(arbol, None, self.home.treeWidget)
+
+            # Expandir el árbol para mostrar la primera estructura
+            self.home.treeWidget.expandToDepth(1)
+
+            # Cambiar a la pestaña del árbol
+            self.home.analysisTabs.setCurrentIndex(3)
+
+            # Actualizar la barra de estado
+            self.home.estado.showMessage("Árbol de derivación generado correctamente")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error al generar el árbol de derivación: {str(e)}")
             self.home.estado.showMessage(f"Error: {str(e)}")
 
     def mostrar_tabla_simbolos(self):
@@ -449,8 +525,11 @@ class Main(QMainWindow):
         self.home.tb_lexico.setRowCount(0)
         self.home.tx_sintactico.clear()
         self.home.tb_simbolos.setRowCount(0)
+        self.home.treeWidget.clear()  # Limpiar también el árbol
         tabla_simbolos.limpiar()  # Limpiar la tabla de símbolos
         self.home.estado.showMessage("Todos los campos han sido limpiados")
+        self.analisis_sintactico_realizado = False  # Reiniciar estado
+        self.home.bt_arbol.setEnabled(True)  # Restaurar el botón
 
 
 def iniciar():
