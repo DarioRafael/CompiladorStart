@@ -424,7 +424,7 @@ class Main(QMainWindow):
             self,
             "Abrir Archivo Java",
             "",
-            "Archivos Java (*.java);;Todos los archivos (*)",
+            "Archivos Java (*.java);;Archivos de Texto (*.txt);;Todos los archivos (*)",
             options=opciones
         )
 

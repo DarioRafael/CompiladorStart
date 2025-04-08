@@ -7,6 +7,7 @@ import ply.lex as lex  # Añade esta línea
 # Resultado del análisis
 resultado_gramatica = []
 
+
 # Definir precedencia de operadores
 precedence = (
     ('right', 'ASIGNAR', 'SUMAASIGNAR', 'RESTAASIGNAR', 'MULTASIGNAR', 'DIVASIGNAR', 'MODULOASIGNAR'),

@@ -96,6 +96,36 @@ class Ui_home(object):
                 background: #505050;
                 border-color: #3E3E3E;
             }
+
+            QTreeWidget {
+                background-color: #1E1E1E;
+                color: #DCDCDC;
+                border: 2px solid #3E3E3E;
+                border-radius: 4px;
+                outline: none;
+            }
+
+            QTreeWidget::item {
+                padding: 6px;
+                margin: 1px;
+            }
+
+            QTreeWidget::item:selected {
+                background-color: #3A5C85;
+                color: #FFFFFF;
+            }
+
+            QTreeWidget::branch:has-children:!has-siblings:closed,
+            QTreeWidget::branch:closed:has-children:has-siblings {
+                border-image: none;
+                image: url(:/images/branch-closed.png);
+            }
+
+            QTreeWidget::branch:open:has-children:!has-siblings,
+            QTreeWidget::branch:open:has-children:has-siblings  {
+                border-image: none;
+                image: url(:/images/branch-open.png);
+            }
         """)
 
         self.centralWidget = QtWidgets.QWidget(home)
@@ -141,9 +171,8 @@ class Ui_home(object):
 
         self.sourceLayout = QtWidgets.QVBoxLayout(self.sourceGroup)
 
-        #self.tx_ingreso = QtWidgets.QTextEdit()
+        # self.tx_ingreso = QtWidgets.QTextEdit()
         self.tx_ingreso = CodeEditor()
-
 
         self.tx_ingreso.setPlaceholderText("Escribe tu código Java aquí o carga un archivo...")
         self.tx_ingreso.setLineWrapMode(QtWidgets.QTextEdit.NoWrap)
@@ -231,6 +260,24 @@ class Ui_home(object):
         self.symbolsLayout.addWidget(self.tb_simbolos)
         self.analysisTabs.addTab(self.symbolsTab, "Tabla de Símbolos")
 
+        # Nueva pestaña para el árbol de derivación
+        self.parseTreeTab = QtWidgets.QWidget()
+        self.parseTreeLayout = QtWidgets.QVBoxLayout(self.parseTreeTab)
+
+        # Crear un árbol para mostrar el árbol de derivación
+        self.treeWidget = QtWidgets.QTreeWidget()
+        self.treeWidget.setHeaderLabel("Árbol de Derivación")
+        self.treeWidget.setColumnCount(1)
+        self.treeWidget.setHeaderHidden(False)
+        self.treeWidget.header().setDefaultSectionSize(300)
+        self.treeWidget.header().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        self.treeWidget.setIndentation(25)  # Sangría para niveles jerárquicos
+        self.treeWidget.setAnimated(True)  # Animaciones al expandir/colapsar
+        self.treeWidget.setFont(QtGui.QFont("Consolas", 11))
+
+        self.parseTreeLayout.addWidget(self.treeWidget)
+        self.analysisTabs.addTab(self.parseTreeTab, "Árbol de Derivación")
+
         self.mainLayout.addWidget(self.analysisTabs)
 
         # Controles inferiores
@@ -273,9 +320,22 @@ class Ui_home(object):
             }
         """)
 
+        self.bt_arbol = QtWidgets.QPushButton("Generar Árbol")
+        self.bt_arbol.setIcon(QtGui.QIcon.fromTheme("view-list-tree"))
+        self.bt_arbol.setStyleSheet("""
+            QPushButton {
+                background-color: #9370DB;
+                border-color: #A080DD;
+            }
+            QPushButton:hover {
+                background-color: #A080DD;
+            }
+        """)
+
         self.bottomControls.addWidget(self.bt_lexico)
         self.bottomControls.addWidget(self.bt_sintactico)
         self.bottomControls.addWidget(self.bt_simbolos)
+        self.bottomControls.addWidget(self.bt_arbol)
         self.bottomControls.addStretch()
 
         self.mainLayout.addLayout(self.bottomControls)
@@ -298,6 +358,7 @@ class Ui_home(object):
         self.shortcut_run_syntactic = QtWidgets.QShortcut(QtGui.QKeySequence("F6"), home)
         self.shortcut_open = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+O"), home)
         self.shortcut_clear = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+L"), home)
+        self.shortcut_tree = QtWidgets.QShortcut(QtGui.QKeySequence("F7"), home)
 
         home.setCentralWidget(self.centralWidget)
 
@@ -311,12 +372,15 @@ class Ui_home(object):
         self.analysisTabs.setTabText(0, _translate("home", "Análisis Léxico"))
         self.analysisTabs.setTabText(1, _translate("home", "Análisis Sintáctico"))
         self.analysisTabs.setTabText(2, _translate("home", "Tabla de Símbolos"))
+        self.analysisTabs.setTabText(3, _translate("home", "Árbol de Derivación"))
         self.bt_lexico.setText(_translate("home", "Analizar Léxico"))
         self.bt_lexico.setToolTip(_translate("home", "Realizar análisis léxico (F5)"))
         self.bt_sintactico.setText(_translate("home", "Analizar Sintaxis"))
         self.bt_sintactico.setToolTip(_translate("home", "Realizar análisis sintáctico (F6)"))
         self.bt_simbolos.setText(_translate("home", "Ver Tabla Símbolos"))
         self.bt_simbolos.setToolTip(_translate("home", "Mostrar tabla de símbolos"))
+        self.bt_arbol.setText(_translate("home", "Generar Árbol"))
+        self.bt_arbol.setToolTip(_translate("home", "Generar árbol de derivación (F7)"))
         self.bt_archivo.setText(_translate("home", "Cargar Archivo"))
         self.bt_archivo.setToolTip(_translate("home", "Abrir un archivo Java (Ctrl+O)"))
         self.bt_limpiar.setText(_translate("home", "Limpiar"))
