@@ -543,7 +543,7 @@ def iniciar():
 
     # Ejecutar el loop de eventos
     sys.exit(app.exec_())
-
+#
 
 if __name__ == '__main__':
     iniciar()

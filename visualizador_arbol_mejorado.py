@@ -271,7 +271,7 @@ def visualizar_arbol_derivacion_mejorado(codigo_fuente, tree_widget):
 
         # Expandir el árbol hasta cierto nivel para mejor visualización
         tree_widget.expandToDepth(2)
-
+#
         return True
 
     except Exception as e:
