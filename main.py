@@ -4,8 +4,9 @@
 import sys
 import os
 from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QTableWidgetItem, QMessageBox
-from PyQt5.QtGui import QColor, QSyntaxHighlighter, QTextCharFormat, QFont
+from PyQt5.QtGui import QColor, QSyntaxHighlighter, QTextCharFormat, QBrush, QFont
 from PyQt5.QtCore import QRegExp
+from visualizador_arbol_mejorado import visualizar_arbol_derivacion_mejorado
 
 # Importar nuestros componentes
 from vista.home import Ui_home
@@ -363,7 +364,7 @@ class Main(QMainWindow):
 
     def generar_arbol(self):
         """
-        Genera y muestra el árbol de derivación
+        Genera y muestra el árbol de derivación mejorado
         """
         # Obtener el código fuente
         codigo = self.home.tx_ingreso.toPlainText().strip()
@@ -392,11 +393,17 @@ class Main(QMainWindow):
         # Limpiar el árbol anterior
         self.home.treeWidget.clear()
 
-        try:
-            # Construir el árbol de derivación
-            arbol, resultados = construir_arbol_derivacion(codigo)
+        # Establecer estilo para el encabezado del árbol
+        self.home.treeWidget.setHeaderLabel("Árbol de Derivación")
+        header_font = QFont("Consolas", 12, QFont.Bold)
+        self.home.treeWidget.headerItem().setFont(0, header_font)
+        self.home.treeWidget.headerItem().setForeground(0, QBrush(QColor('#F89406')))  # Naranja
 
-            if arbol is None:
+        try:
+            # Generar árbol mejorado
+            resultado = visualizar_arbol_derivacion_mejorado(codigo, self.home.treeWidget)
+
+            if not resultado:
                 QMessageBox.warning(
                     self,
                     "Error al generar árbol",
@@ -405,17 +412,11 @@ class Main(QMainWindow):
                 )
                 return
 
-            # Generar el árbol visual
-            generar_arbol_qt(arbol, None, self.home.treeWidget)
-
-            # Expandir el árbol para mostrar la primera estructura
-            self.home.treeWidget.expandToDepth(1)
-
             # Cambiar a la pestaña del árbol
             self.home.analysisTabs.setCurrentIndex(3)
 
             # Actualizar la barra de estado
-            self.home.estado.showMessage("Árbol de derivación generado correctamente")
+            self.home.estado.showMessage("Árbol de derivación detallado generado correctamente")
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al generar el árbol de derivación: {str(e)}")
