@@ -321,6 +321,7 @@ class Ui_home(object):
         """)
 
         self.bt_arbol = QtWidgets.QPushButton("Generar Árbol")
+
         self.bt_arbol.setIcon(QtGui.QIcon.fromTheme("view-list-tree"))
         self.bt_arbol.setStyleSheet("""
             QPushButton {
@@ -332,10 +333,15 @@ class Ui_home(object):
             }
         """)
 
+        self.bt_arbolLR = QtWidgets.QPushButton("Generar Árbol LR")
+        self.bt_arbol_lr = self.bt_arbolLR
+
+
         self.bottomControls.addWidget(self.bt_lexico)
         self.bottomControls.addWidget(self.bt_sintactico)
         self.bottomControls.addWidget(self.bt_simbolos)
         self.bottomControls.addWidget(self.bt_arbol)
+        self.bottomControls.addWidget(self.bt_arbolLR)
         self.bottomControls.addStretch()
 
         self.mainLayout.addLayout(self.bottomControls)
