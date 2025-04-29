@@ -93,7 +93,7 @@ def construir_arbol_desde_tokens(tokens):
 
 def agrupar_tokens_por_estructura(tokens):
     """
-    Agrupa los tokens en estructuras lógicas del programa
+    Agrupa los tokens en estructuras lógicas del programa con mayor precisión
 
     Args:
         tokens: Lista de tokens del análisis léxico
@@ -102,12 +102,16 @@ def agrupar_tokens_por_estructura(tokens):
         dict: Diccionario con tokens agrupados por estructura
     """
     estructuras = {
+        "clases": [],
         "declaraciones": [],
+        "metodos": [],
+        "palabras_reservadas": [],
         "condicionales": [],
         "bucles": [],
         "asignaciones": [],
         "llamadas": [],
-        "otros": []
+        "operadores": [],
+        "simbolos": []
     }
 
     i = 0
@@ -115,93 +119,147 @@ def agrupar_tokens_por_estructura(tokens):
         token = tokens[i]
         tipo = token.get("tipo", "")
 
-        # Identificar declaraciones de variables
-        if tipo in ["INT", "FLOAT", "DOUBLE", "BOOLEAN", "CHAR", "STRING"]:
-            # Capturar toda la declaración hasta el punto y coma
+        # Palabras reservadas del lenguaje
+        if tipo in ["PUBLIC", "PRIVATE", "PROTECTED", "STATIC", "VOID", "CLASS", "ABSTRACT", "FINAL"]:
+            estructuras["palabras_reservadas"].append(token)
+            i += 1
+            continue
+
+        # Símbolos de puntuación
+        if tipo in ["LLAIZQ", "LLADER", "PUNTOCOMA", "CORIZQ", "CORDER", "PARIZQ", "PARDER", "PUNTO"]:
+            estructuras["simbolos"].append(token)
+            i += 1
+            continue
+
+        # Operadores
+        if tipo in ["ASIGNAR", "SUMA", "RESTA", "MULT", "DIV", "INCREMENTO", "DECREMENTO",
+                    "MENORQUE", "MAYORQUE", "MENORIGUAL", "MAYORIGUAL", "MULTASIGNAR"]:
+            estructuras["operadores"].append(token)
+            i += 1
+            continue
+
+        # Identificar declaración de clases
+        if tipo == "CLASS":
+            clase = [token]
+            j = i + 1
+            # Capturar nombre de la clase y llaves
+            while j < len(tokens) and tokens[j].get("tipo") not in ["LLAIZQ", "LLADER"]:
+                clase.append(tokens[j])
+                j += 1
+            if j < len(tokens):
+                clase.append(tokens[j])
+
+            estructuras["clases"].extend(clase)
+            i = j + 1
+            continue
+
+        # Identificar métodos (como el método main)
+        elif tipo in ["PUBLIC", "PRIVATE", "PROTECTED"] and i + 2 < len(tokens) and \
+                tokens[i + 1].get("tipo") in ["STATIC", "VOID", "INT", "STRING"] and \
+                tokens[i + 2].get("tipo") == "IDENTIFICADOR":
+            metodo = [token]
+            j = i + 1
+            llaves_abiertas = 0
+
+            # Capturar toda la firma del método y su contenido
+            while j < len(tokens):
+                metodo.append(tokens[j])
+
+                if tokens[j].get("tipo") == "LLAIZQ":
+                    llaves_abiertas += 1
+                elif tokens[j].get("tipo") == "LLADER":
+                    llaves_abiertas -= 1
+
+                if llaves_abiertas == 0 and tokens[j].get("tipo") == "LLADER":
+                    break
+
+                j += 1
+
+            estructuras["metodos"].extend(metodo)
+            i = j + 1
+            continue
+
+        # Declaraciones de variables
+        elif tipo in ["INT", "FLOAT", "DOUBLE", "BOOLEAN", "CHAR", "STRING"]:
             declaracion = [token]
             j = i + 1
             while j < len(tokens) and tokens[j].get("tipo") != "PUNTOCOMA":
                 declaracion.append(tokens[j])
                 j += 1
             if j < len(tokens):
-                declaracion.append(tokens[j])  # Incluir el punto y coma
+                declaracion.append(tokens[j])
 
             estructuras["declaraciones"].extend(declaracion)
             i = j + 1
             continue
 
-        # Identificar condicionales (if, else, switch)
+        # Condicionales (if, else, switch)
         elif tipo in ["IF", "ELSE", "SWITCH", "CASE"]:
-            # Capturar la estructura condicional
             condicional = [token]
             j = i + 1
             llaves_abiertas = 0
 
-            # Si hay un paréntesis abierto, capturar la condición
-            if j < len(tokens) and tokens[j].get("tipo") == "PARIZQ":
-                llaves_abiertas += 1
+            while j < len(tokens):
                 condicional.append(tokens[j])
+
+                if tokens[j].get("tipo") == "LLAIZQ":
+                    llaves_abiertas += 1
+                elif tokens[j].get("tipo") == "LLADER":
+                    llaves_abiertas -= 1
+
+                if llaves_abiertas == 0 and tokens[j].get("tipo") == "LLADER":
+                    break
+
                 j += 1
 
-                while j < len(tokens) and llaves_abiertas > 0:
-                    if tokens[j].get("tipo") == "PARIZQ":
-                        llaves_abiertas += 1
-                    elif tokens[j].get("tipo") == "PARDER":
-                        llaves_abiertas -= 1
-                    condicional.append(tokens[j])
-                    j += 1
-
             estructuras["condicionales"].extend(condicional)
-            i = j
+            i = j + 1
             continue
 
-        # Identificar bucles (for, while, do)
+        # Bucles (for, while, do)
         elif tipo in ["FOR", "WHILE", "DO"]:
             bucle = [token]
             j = i + 1
             llaves_abiertas = 0
 
-            # Si hay un paréntesis abierto, capturar la condición del bucle
-            if j < len(tokens) and tokens[j].get("tipo") == "PARIZQ":
-                llaves_abiertas += 1
+            while j < len(tokens):
                 bucle.append(tokens[j])
+
+                if tokens[j].get("tipo") == "LLAIZQ":
+                    llaves_abiertas += 1
+                elif tokens[j].get("tipo") == "LLADER":
+                    llaves_abiertas -= 1
+
+                if llaves_abiertas == 0 and tokens[j].get("tipo") == "LLADER":
+                    break
+
                 j += 1
 
-                while j < len(tokens) and llaves_abiertas > 0:
-                    if tokens[j].get("tipo") == "PARIZQ":
-                        llaves_abiertas += 1
-                    elif tokens[j].get("tipo") == "PARDER":
-                        llaves_abiertas -= 1
-                    bucle.append(tokens[j])
-                    j += 1
-
             estructuras["bucles"].extend(bucle)
-            i = j
+            i = j + 1
             continue
 
-        # Identificar asignaciones (=)
+        # Asignaciones
         elif tipo == "IDENTIFICADOR" and i + 1 < len(tokens) and tokens[i + 1].get("tipo") == "ASIGNAR":
-            asignacion = [token, tokens[i + 1]]  # Identificador y =
+            asignacion = [token, tokens[i + 1]]
             j = i + 2
 
-            # Capturar el valor hasta el punto y coma
             while j < len(tokens) and tokens[j].get("tipo") != "PUNTOCOMA":
                 asignacion.append(tokens[j])
                 j += 1
             if j < len(tokens):
-                asignacion.append(tokens[j])  # Incluir el punto y coma
+                asignacion.append(tokens[j])
 
             estructuras["asignaciones"].extend(asignacion)
             i = j + 1
             continue
 
-        # Identificar llamadas a funciones
+        # Llamadas a funciones
         elif tipo == "IDENTIFICADOR" and i + 1 < len(tokens) and tokens[i + 1].get("tipo") == "PARIZQ":
-            llamada = [token, tokens[i + 1]]  # Nombre de función y (
+            llamada = [token, tokens[i + 1]]
             j = i + 2
             llaves_abiertas = 1
 
-            # Capturar los argumentos
             while j < len(tokens) and llaves_abiertas > 0:
                 if tokens[j].get("tipo") == "PARIZQ":
                     llaves_abiertas += 1
@@ -210,24 +268,27 @@ def agrupar_tokens_por_estructura(tokens):
                 llamada.append(tokens[j])
                 j += 1
 
-            # Capturar hasta el punto y coma
             while j < len(tokens) and tokens[j].get("tipo") != "PUNTOCOMA":
                 llamada.append(tokens[j])
                 j += 1
             if j < len(tokens):
-                llamada.append(tokens[j])  # Incluir el punto y coma
+                llamada.append(tokens[j])
 
             estructuras["llamadas"].extend(llamada)
             i = j + 1
             continue
 
-        # Otros tokens
+        # Cualquier token que no encaje en las categorías anteriores
+        # Intentamos categorizarlo de la manera más precisa posible
+        if tipo in ["IDENTIFICADOR", "ENTERO", "DECIMAL", "CADENA", "CARACTER"]:
+            estructuras["declaraciones"].append(token)
         else:
-            estructuras["otros"].append(token)
-            i += 1
+            # Si realmente no sabemos qué es, lo ponemos en palabras reservadas
+            estructuras["palabras_reservadas"].append(token)
+
+        i += 1
 
     return estructuras
-
 
 def calcular_recorridos(nodo):
     """
