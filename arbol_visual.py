@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
+"""
+arbol_visual.py - Visualizador de Árboles de Recorrido
+Este módulo implementa una visualización de árbol vertical (de arriba hacia abajo)
+con representaciones para pre-orden, in-orden y post-orden.
+"""
 
-# arbol_visual.py - versión mejorada
 import sys
 import io
 
@@ -8,45 +12,44 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 from PyQt5.QtWidgets import (
-    QApplication, QDialog, QVBoxLayout, QHBoxLayout,
+    QApplication, QDialog, QVBoxLayout, QHBoxLayout, QToolBar,
     QPushButton, QLabel, QTabWidget, QGraphicsView, QGraphicsScene,
-    QGraphicsEllipseItem, QGraphicsTextItem, QGraphicsLineItem, QMessageBox, QWidget
+    QGraphicsRectItem, QGraphicsTextItem, QGraphicsLineItem, QGraphicsEllipseItem,
+    QMessageBox, QWidget, QSlider, QAction
 )
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor, QBrush, QPen, QFont, QPainter
+from PyQt5.QtCore import Qt, QRectF, QPointF
+from PyQt5.QtGui import QColor, QBrush, QPen, QFont, QPainter, QIcon
 
 
 # Clase que representa un nodo del árbol
-class NodoBinario:
+class NodoArbol:
     def __init__(self, tipo, valor=None, linea=None):
         self.tipo = tipo
-        self.valor = valor
+        self.valor = valor if valor else tipo
         self.linea = linea
         self.hijos = []
-        self.izquierdo = None  # Para compatibilidad con la visualización binaria
-        self.derecho = None  # Para compatibilidad con la visualización binaria
-        self.x = 0
-        self.y = 0
+        self.padre = None
+        self.x = 0  # Posición X para dibujar
+        self.y = 0  # Posición Y para dibujar
+        self.width = 100  # Ancho del nodo
+        self.height = 40  # Alto del nodo
         self.orden_preorden = 0
         self.orden_inorden = 0
         self.orden_postorden = 0
-        self.recorrido_preorden = []
-        self.recorrido_inorden = []
-        self.recorrido_postorden = []
 
     def agregar_hijo(self, nodo):
         """Agrega un hijo al nodo actual"""
         self.hijos.append(nodo)
-        # Actualizar izquierdo/derecho para visualización binaria
-        if len(self.hijos) == 1:
-            self.izquierdo = nodo
-        elif len(self.hijos) == 2:
-            self.derecho = nodo
+        nodo.padre = self
         return nodo
+
+    def __str__(self):
+        """Representación en cadena del nodo"""
+        return f"{self.tipo}: {self.valor}" if self.valor else self.tipo
 
 
 # Clase para representar el árbol
-class ArbolBinario:
+class Arbol:
     def __init__(self):
         self.raiz = None
         self.contador_preorden = 1
@@ -54,19 +57,37 @@ class ArbolBinario:
         self.contador_postorden = 1
 
     def crear_arbol_ejemplo(self):
-        # Crear un árbol de ejemplo
-        self.raiz = NodoBinario("programa", "Programa")
-        self.raiz.agregar_hijo(NodoBinario("declaraciones", "Declaraciones"))
-        self.raiz.agregar_hijo(NodoBinario("instrucciones", "Instrucciones"))
+        """Crea un árbol de ejemplo para pruebas"""
+        self.raiz = NodoArbol("programa", "Programa")
 
-        # Añadir algunos nodos hijos
-        self.raiz.hijos[0].agregar_hijo(NodoBinario("class", "Class"))
-        self.raiz.hijos[0].agregar_hijo(NodoBinario("variables", "Variables"))
-        self.raiz.hijos[1].agregar_hijo(NodoBinario("if", "If"))
-        self.raiz.hijos[1].agregar_hijo(NodoBinario("for", "For"))
+        # Nivel 1
+        nodo_declaraciones = NodoArbol("declaraciones", "Declaraciones")
+        nodo_instrucciones = NodoArbol("instrucciones", "Instrucciones")
+        self.raiz.agregar_hijo(nodo_declaraciones)
+        self.raiz.agregar_hijo(nodo_instrucciones)
+
+        # Nivel 2 - Declaraciones
+        nodo_int = NodoArbol("int", "int")
+        nodo_declaraciones.agregar_hijo(nodo_int)
+
+        nodo_float = NodoArbol("float", "float")
+        nodo_declaraciones.agregar_hijo(nodo_float)
+
+        # Nivel 2 - Instrucciones
+        nodo_if = NodoArbol("if", "if")
+        nodo_instrucciones.agregar_hijo(nodo_if)
+
+        nodo_while = NodoArbol("while", "while")
+        nodo_instrucciones.agregar_hijo(nodo_while)
+
+        # Nivel 3 - Identificadores
+        nodo_id1 = NodoArbol("identificador", "contador")
+        nodo_int.agregar_hijo(nodo_id1)
+
+        nodo_id2 = NodoArbol("identificador", "precio")
+        nodo_float.agregar_hijo(nodo_id2)
 
         # Calcular los recorridos
-        self._calcular_recorridos()
         self.calcular_orden_recorridos()
         return True
 
@@ -84,11 +105,10 @@ class ArbolBinario:
                 print("Error al construir el árbol")
                 return False
 
-            # Convertir el árbol de recorridos_arbol a la estructura de ArbolBinario
+            # Convertir el árbol de recorridos_arbol a la estructura de Arbol
             self.raiz = self._convertir_nodo(arbol)
 
-            # Calcular recorridos
-            self._calcular_recorridos()
+            # Calcular los recorridos
             self.calcular_orden_recorridos()
 
             return True
@@ -98,10 +118,10 @@ class ArbolBinario:
 
     def _convertir_nodo(self, nodo_original):
         """
-        Convierte un NodoRecorrido de recorridos_arbol a un NodoBinario de arbol_visual
+        Convierte un NodoRecorrido de recorridos_arbol a un NodoArbol
         """
         # Crear nuevo nodo con el mismo tipo y valor
-        nuevo_nodo = NodoBinario(nodo_original.tipo, nodo_original.valor, nodo_original.linea)
+        nuevo_nodo = NodoArbol(nodo_original.tipo, nodo_original.valor, nodo_original.linea)
 
         # Convertir recursivamente los hijos
         for hijo_original in nodo_original.hijos:
@@ -110,506 +130,213 @@ class ArbolBinario:
 
         return nuevo_nodo
 
-    def _construir_arbol_recorridos(self, codigo_fuente):
-        """
-        Construye un árbol y sus recorridos a partir del análisis del código
-        """
-        from analizador_sintactico import prueba_sintactica
-        from analizador_lexico import tabla_simbolos, prueba
-
-        # Limpiar tabla de símbolos antes de análisis
-        tabla_simbolos.limpiar()
-
-        # Realizar análisis léxico primero
-        tokens = prueba(codigo_fuente)
-
-        # Realizar análisis sintáctico
-        resultados = prueba_sintactica(codigo_fuente)
-
-        # Verificar si hay errores en el análisis sintáctico
-        errores = [r for r in resultados if "Error" in r]
-        if errores:
-            return None, errores
-
-        # Construir el árbol a partir de los tokens
-        return self._construir_arbol_desde_tokens(tokens), resultados
-
-    def _construir_arbol_desde_tokens(self, tokens):
-        """
-        Construye un árbol estructurado a partir de los tokens
-        """
-        raiz = NodoBinario("programa", "Código Java")
-
-        # Agrupamos tokens por estructuras lógicas
-        estructuras = self._agrupar_tokens_por_estructura(tokens)
-
-        # Construir el árbol con los grupos de tokens
-        for tipo, grupo in estructuras.items():
-            if grupo:  # Solo crear nodos para grupos no vacíos
-                nodo_estructura = NodoBinario(tipo, f"{tipo.capitalize()}")
-                raiz.agregar_hijo(nodo_estructura)
-
-                for token in grupo:
-                    # Solo incluimos tokens significativos
-                    if token.get("tipo") not in ["LLAIZQ", "LLADER", "PUNTOCOMA"]:
-                        valor = str(token.get("valor", ""))
-                        tipo = token.get("tipo", "")
-                        linea = token.get("linea", 0)
-
-                        nodo_token = NodoBinario(tipo.lower(), valor, linea)
-                        nodo_estructura.agregar_hijo(nodo_token)
-
-        return raiz
-
-    def _agrupar_tokens_por_estructura(self, tokens):
-        """
-        Agrupa los tokens en estructuras lógicas del programa
-        """
-        estructuras = {
-            "declaraciones": [],
-            "condicionales": [],
-            "bucles": [],
-            "asignaciones": [],
-            "llamadas": [],
-            "otros": []
-        }
-
-        i = 0
-        while i < len(tokens):
-            token = tokens[i]
-            tipo = token.get("tipo", "")
-
-            # Identificar declaraciones de variables
-            if tipo in ["INT", "FLOAT", "DOUBLE", "BOOLEAN", "CHAR", "STRING"]:
-                # Capturar toda la declaración hasta el punto y coma
-                declaracion = [token]
-                j = i + 1
-                while j < len(tokens) and tokens[j].get("tipo") != "PUNTOCOMA":
-                    declaracion.append(tokens[j])
-                    j += 1
-                if j < len(tokens):
-                    declaracion.append(tokens[j])  # Incluir el punto y coma
-
-                estructuras["declaraciones"].extend(declaracion)
-                i = j + 1
-                continue
-
-            # Identificar condicionales (if, else, switch)
-            elif tipo in ["IF", "ELSE", "SWITCH", "CASE"]:
-                # Capturar la estructura condicional
-                condicional = [token]
-                j = i + 1
-                llaves_abiertas = 0
-
-                # Si hay un paréntesis abierto, capturar la condición
-                if j < len(tokens) and tokens[j].get("tipo") == "PARIZQ":
-                    llaves_abiertas += 1
-                    condicional.append(tokens[j])
-                    j += 1
-
-                    while j < len(tokens) and llaves_abiertas > 0:
-                        if tokens[j].get("tipo") == "PARIZQ":
-                            llaves_abiertas += 1
-                        elif tokens[j].get("tipo") == "PARDER":
-                            llaves_abiertas -= 1
-                        condicional.append(tokens[j])
-                        j += 1
-
-                estructuras["condicionales"].extend(condicional)
-                i = j
-                continue
-
-            # Identificar bucles (for, while, do)
-            elif tipo in ["FOR", "WHILE", "DO"]:
-                bucle = [token]
-                j = i + 1
-                llaves_abiertas = 0
-
-                # Si hay un paréntesis abierto, capturar la condición del bucle
-                if j < len(tokens) and tokens[j].get("tipo") == "PARIZQ":
-                    llaves_abiertas += 1
-                    bucle.append(tokens[j])
-                    j += 1
-
-                    while j < len(tokens) and llaves_abiertas > 0:
-                        if tokens[j].get("tipo") == "PARIZQ":
-                            llaves_abiertas += 1
-                        elif tokens[j].get("tipo") == "PARDER":
-                            llaves_abiertas -= 1
-                        bucle.append(tokens[j])
-                        j += 1
-
-                estructuras["bucles"].extend(bucle)
-                i = j
-                continue
-
-            # Identificar asignaciones (=)
-            elif tipo == "IDENTIFICADOR" and i + 1 < len(tokens) and tokens[i + 1].get("tipo") == "ASIGNAR":
-                asignacion = [token, tokens[i + 1]]  # Identificador y =
-                j = i + 2
-
-                # Capturar el valor hasta el punto y coma
-                while j < len(tokens) and tokens[j].get("tipo") != "PUNTOCOMA":
-                    asignacion.append(tokens[j])
-                    j += 1
-                if j < len(tokens):
-                    asignacion.append(tokens[j])  # Incluir el punto y coma
-
-                estructuras["asignaciones"].extend(asignacion)
-                i = j + 1
-                continue
-
-            # Identificar llamadas a funciones
-            elif tipo == "IDENTIFICADOR" and i + 1 < len(tokens) and tokens[i + 1].get("tipo") == "PARIZQ":
-                llamada = [token, tokens[i + 1]]  # Nombre de función y (
-                j = i + 2
-                llaves_abiertas = 1
-
-                # Capturar los argumentos
-                while j < len(tokens) and llaves_abiertas > 0:
-                    if tokens[j].get("tipo") == "PARIZQ":
-                        llaves_abiertas += 1
-                    elif tokens[j].get("tipo") == "PARDER":
-                        llaves_abiertas -= 1
-                    llamada.append(tokens[j])
-                    j += 1
-
-                # Capturar hasta el punto y coma
-                while j < len(tokens) and tokens[j].get("tipo") != "PUNTOCOMA":
-                    llamada.append(tokens[j])
-                    j += 1
-                if j < len(tokens):
-                    llamada.append(tokens[j])  # Incluir el punto y coma
-
-                estructuras["llamadas"].extend(llamada)
-                i = j + 1
-                continue
-
-            # Otros tokens
-            else:
-                estructuras["otros"].append(token)
-                i += 1
-
-        return estructuras
-
-    def _calcular_recorridos(self):
-        """Calcula los recorridos del árbol"""
-        if not self.raiz:
-            return
-
-        # Pre-orden: Raíz, Izquierda, Derecha
-        def preorden(nodo):
-            if not nodo:
-                return []
-
-            resultado = [(nodo.tipo, nodo.valor)]
-            for hijo in nodo.hijos:
-                resultado.extend(preorden(hijo))
-            return resultado
-
-        # In-orden: Izquierda, Raíz, Derecha (adaptado para árbol n-ario)
-        def inorden(nodo):
-            if not nodo:
-                return []
-
-            resultado = []
-            if nodo.hijos:
-                # Mitad izquierda
-                mitad = len(nodo.hijos) // 2
-                for i in range(mitad):
-                    resultado.extend(inorden(nodo.hijos[i]))
-
-                # Raíz
-                resultado.append((nodo.tipo, nodo.valor))
-
-                # Mitad derecha
-                for i in range(mitad, len(nodo.hijos)):
-                    resultado.extend(inorden(nodo.hijos[i]))
-            else:
-                resultado.append((nodo.tipo, nodo.valor))
-
-            return resultado
-
-        # Post-orden: Izquierda, Derecha, Raíz
-        def postorden(nodo):
-            if not nodo:
-                return []
-
-            resultado = []
-            for hijo in nodo.hijos:
-                resultado.extend(postorden(hijo))
-            resultado.append((nodo.tipo, nodo.valor))
-            return resultado
-
-        # Calcular y almacenar los recorridos
-        self.raiz.recorrido_preorden = preorden(self.raiz)
-        self.raiz.recorrido_inorden = inorden(self.raiz)
-        self.raiz.recorrido_postorden = postorden(self.raiz)
-
     def calcular_orden_recorridos(self):
-        """Numera los nodos en los diferentes recorridos"""
+        """Calcula los órdenes de recorrido para cada nodo"""
         if not self.raiz:
             return
 
-        # Resetear contadores
+        # Inicializar contadores
         self.contador_preorden = 1
         self.contador_inorden = 1
         self.contador_postorden = 1
 
-        self._calcular_orden_recorridos_recursivo(self.raiz)
+        # Realizar recorridos
+        self._recorrido_preorden(self.raiz)
+        self._recorrido_inorden(self.raiz)
+        self._recorrido_postorden(self.raiz)
 
-    def _calcular_orden_recorridos_recursivo(self, nodo):
+    def _recorrido_preorden(self, nodo):
+        """Pre-orden: Raíz → Izquierda → Derecha"""
         if nodo is None:
-            return
+            return []
 
-        # Pre-orden: Raíz -> Izquierda -> Derecha
-        nodo.orden_preorden = self.contador_preorden
-        self.contador_preorden += 1
+        # 1. Visita la raíz
+        resultado = [nodo]
 
-        # Recorrer subárboles de izquierda a derecha (para la mitad izquierda)
+        # 2. Recorre subárbol izquierdo en pre-orden
+        for hijo in nodo.hijos:
+            resultado.extend(self._recorrido_preorden(hijo))
+
+        return resultado
+
+    def _recorrido_inorden(self, nodo):
+        """In-orden: Izquierda → Raíz → Derecha (adaptado para múltiples hijos)"""
+        if nodo is None:
+            return []
+
+        resultado = []
         mitad = len(nodo.hijos) // 2
+
+        # 1. Recorre primera mitad de hijos (subárbol izquierdo)
         for i in range(mitad):
-            self._calcular_orden_recorridos_recursivo(nodo.hijos[i])
+            resultado.extend(self._recorrido_inorden(nodo.hijos[i]))
 
-        # In-orden: Izquierda -> Raíz -> Derecha
-        nodo.orden_inorden = self.contador_inorden
-        self.contador_inorden += 1
+        # 2. Visita la raíz
+        resultado.append(nodo)
 
-        # Recorrer subárboles restantes (mitad derecha)
+        # 3. Recorre segunda mitad de hijos (subárbol derecho)
         for i in range(mitad, len(nodo.hijos)):
-            self._calcular_orden_recorridos_recursivo(nodo.hijos[i])
+            resultado.extend(self._recorrido_inorden(nodo.hijos[i]))
 
-        # Post-orden: Izquierda -> Derecha -> Raíz
-        nodo.orden_postorden = self.contador_postorden
-        self.contador_postorden += 1
+        return resultado
+
+    def _recorrido_postorden(self, nodo):
+        """Post-orden: Izquierda → Derecha → Raíz"""
+        if nodo is None:
+            return []
+
+        resultado = []
+
+        # 1. Recorre todos los subárboles
+        for hijo in nodo.hijos:
+            resultado.extend(self._recorrido_postorden(hijo))
+
+        # 2. Visita la raíz
+        resultado.append(nodo)
+
+        return resultado
+
+
+# Clase para la vista personalizada del árbol
+class VistaArbolGrafica(QGraphicsView):
+    def __init__(self, parent=None):
+        super(VistaArbolGrafica, self).__init__(parent)
+
+        # Configuración de la vista
+        self.setRenderHint(QPainter.Antialiasing)
+        self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
+        self.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
+        self.setDragMode(QGraphicsView.ScrollHandDrag)
+        self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
+
+        # Factor de zoom
+        self.escala = 1.0
+        self.factor_zoom = 1.2
+
+        # Escena
+        self.escena = QGraphicsScene(self)
+        self.setScene(self.escena)
+
+    def wheelEvent(self, event):
+        """Maneja el evento de la rueda del ratón para hacer zoom"""
+        factor_zoom = self.factor_zoom
+
+        if event.angleDelta().y() < 0:
+            # Zoom out
+            factor_zoom = 1.0 / factor_zoom
+            self.escala /= self.factor_zoom
+        else:
+            # Zoom in
+            self.escala *= self.factor_zoom
+
+        # Limitar zoom
+        if 0.25 <= self.escala <= 4.0:
+            self.scale(factor_zoom, factor_zoom)
+        else:
+            # Restaurar escala
+            self.escala = max(0.25, min(self.escala, 4.0))
 
 
 # Clase para dibujar el árbol en la escena
-class VistaArbol(QGraphicsScene):
-    def __init__(self, parent=None):
-        super(VistaArbol, self).__init__(parent)
-        self.setBackgroundBrush(QBrush(QColor("#1E1E1E")))
-        self.modo_recorrido = "preorden"
-        self.colores_tipos = {
-            "programa": "#F89406",  # Naranja
-            "declaraciones": "#9CDCFE",  # Azul claro
-            "instrucciones": "#DCDCAA",  # Amarillo
-            "condicionales": "#C586C0",  # Morado
-            "bucles": "#D7BA7D",  # Amarillo ocre
-            "asignaciones": "#DCDCAA",  # Amarillo
-            "llamadas": "#57A64A",  # Verde
-            "identificador": "#9CDCFE",  # Azul claro
-            "class": "#4EC9B0",  # Verde agua
-            "variables": "#9CDCFE",  # Azul claro
-            "if": "#C586C0",  # Morado
-            "for": "#D7BA7D",  # Amarillo ocre
-            "int": "#569CD6",  # Azul
-            "float": "#569CD6",  # Azul
-            "double": "#569CD6",  # Azul
-            "boolean": "#569CD6",  # Azul
-            "char": "#569CD6",  # Azul
-            "string": "#569CD6",  # Azul
-            "entero": "#B5CEA8",  # Verde claro
-            "decimal": "#B5CEA8",  # Verde claro
-            "cadena": "#CE9178",  # Rojo claro
-            "otros": "#808080",  # Gris
+class DibujanteArbol:
+    def __init__(self, escena, modo_recorrido=None):
+        self.escena = escena
+        self.modo_recorrido = modo_recorrido
+
+        # Colores para nodos según tipo
+        self.colores_nodos = {
+            "programa": "#B9DDFF",  # Azul claro
+            "declaraciones": "#B9DDFF",  # Azul claro
+            "instrucciones": "#B9DDFF",  # Azul claro
+            "if": "#B9DDFF",  # Azul claro
+            "while": "#B9DDFF",  # Azul claro
+            "for": "#B9DDFF",  # Azul claro
+            "int": "#B9DDFF",  # Azul claro
+            "float": "#B9DDFF",  # Azul claro
+            "double": "#B9DDFF",  # Azul claro
+            "char": "#B9DDFF",  # Azul claro
+            "boolean": "#B9DDFF",  # Azul claro
+            "string": "#B9DDFF",  # Azul claro
+            "identificador": "#B5F5B9",  # Verde claro
+            "entero": "#FFFFA6",  # Amarillo claro
+            "decimal": "#FFFFA6",  # Amarillo claro
+            "condicionales": "#B9DDFF",  # Azul claro
+            "bucles": "#B9DDFF",  # Azul claro
+            "asignaciones": "#B9DDFF",  # Azul claro
+            "llamadas": "#B9DDFF",  # Azul claro
+            "default": "#B9DDFF"  # Azul claro por defecto
         }
 
-    def dibujar_arbol(self, arbol, tipo_recorrido):
-        self.clear()
-        self.modo_recorrido = tipo_recorrido
+    def dibujar_arbol(self, arbol):
+        """Dibuja el árbol completo en la escena"""
+        self.escena.clear()
 
         if not arbol.raiz:
+            QMessageBox.warning(None, "Error", "El árbol no tiene una raíz válida.")
             return
 
-        # Dibujar título
-        titulo = "Recorrido "
-        if tipo_recorrido == "preorden":
-            titulo += "Pre-orden (Raíz → Izquierda → Derecha)"
-            color_titulo = QColor("#569CD6")  # Azul
-        elif tipo_recorrido == "inorden":
-            titulo += "In-orden (Izquierda → Raíz → Derecha)"
-            color_titulo = QColor("#4EC9B0")  # Verde
+        # Calcular posiciones para cada recorrido
+        if self.modo_recorrido == "preorden":
+            recorrido = arbol._recorrido_preorden(arbol.raiz)
+        elif self.modo_recorrido == "inorden":
+            recorrido = arbol._recorrido_inorden(arbol.raiz)
         else:  # postorden
-            titulo += "Post-orden (Izquierda → Derecha → Raíz)"
-            color_titulo = QColor("#C586C0")  # Morado
+            recorrido = arbol._recorrido_postorden(arbol.raiz)
 
-        texto_titulo = QGraphicsTextItem(titulo)
-        texto_titulo.setFont(QFont("Arial", 18, QFont.Bold))
-        texto_titulo.setDefaultTextColor(color_titulo)
-        texto_titulo.setPos(50, 20)
-        self.addItem(texto_titulo)
-
-        # Calcular posiciones de los nodos - adaptamos para manejar múltiples hijos
-        self._calcular_posiciones(arbol.raiz, 0, 0, 1000)
-
-        # Dibujar las líneas y conexiones
-        self._dibujar_conexiones(arbol.raiz)
-
-        # Dibujar los nodos
-        self._dibujar_nodos(arbol.raiz)
-
-        # Opcional: Dibujar leyenda
-        self._dibujar_leyenda()
-
-    def _calcular_posiciones(self, nodo, nivel, min_x, max_x):
-        """Calcula las posiciones X,Y para cada nodo en el árbol"""
-        if nodo is None:
+        if not recorrido:
+            QMessageBox.warning(None, "Error", "No se pudo calcular el recorrido del árbol.")
             return
 
-        # Número total de nodos en este nivel
-        num_hijos = len(nodo.hijos)
+        # Dibujar nodos en el orden del recorrido
+        self._dibujar_recorrido(recorrido)
 
-        # Posición Y basada en el nivel
-        nodo.y = 100 + nivel * 100
+    def _dibujar_recorrido(self, recorrido):
+        """Dibuja los nodos en el orden del recorrido"""
+        # Configuración inicial
+        x_inicial = 50
+        y_inicial = 100
+        espacio_horizontal = 150
+        espacio_vertical = 100
 
-        # Posición X centrada entre mínimo y máximo
-        nodo.x = (min_x + max_x) / 2
+        # Dibujar cada nodo en el recorrido
+        for i, nodo in enumerate(recorrido):
+            x = x_inicial + i * espacio_horizontal
+            y = y_inicial
 
-        if num_hijos > 0:
-            # Ancho de la sección para cada hijo
-            ancho_seccion = (max_x - min_x) / num_hijos
+            # Dibujar nodo
+            self._dibujar_nodo(nodo, x, y)
 
-            # Calcular posiciones para cada hijo
-            for i, hijo in enumerate(nodo.hijos):
-                x_min_hijo = min_x + i * ancho_seccion
-                x_max_hijo = min_x + (i + 1) * ancho_seccion
-                self._calcular_posiciones(hijo, nivel + 1, x_min_hijo, x_max_hijo)
+    def _dibujar_nodo(self, nodo, x, y):
+        """Dibuja un nodo en la posición especificada"""
+        # Crear el rectángulo
+        rectangulo = QGraphicsRectItem(x, y, 100, 40)
 
-    def _dibujar_conexiones(self, nodo):
-        """Dibuja las líneas que conectan los nodos"""
-        if nodo is None or not nodo.hijos:
-            return
-
-        # Tamaño del nodo
-        radio = 40
-
-        # Dibujar líneas a todos los hijos
-        for hijo in nodo.hijos:
-            linea = QGraphicsLineItem(nodo.x, nodo.y + radio - 5,
-                                      hijo.x, hijo.y - radio + 5)
-            linea.setPen(QPen(QColor("#AAAAAA"), 2))
-            self.addItem(linea)
-
-            # Dibujar conexiones recursivamente
-            self._dibujar_conexiones(hijo)
-
-    def _dibujar_nodos(self, nodo):
-        """Dibuja los nodos del árbol con su orden de recorrido"""
-        if nodo is None:
-            return
-
-        # Tamaño del nodo
-        radio = 40
-
-        # Crear círculo para el nodo
-        circulo = QGraphicsEllipseItem(nodo.x - radio, nodo.y - radio, radio * 2, radio * 2)
-
-        # Color según tipo de nodo
-        color = self.colores_tipos.get(nodo.tipo.lower(), "#808080")
-        circulo.setBrush(QBrush(QColor(color)))
-        circulo.setPen(QPen(QColor("#FFFFFF"), 2))
-        self.addItem(circulo)
+        # Establecer color según tipo de nodo
+        color = self.colores_nodos.get(nodo.tipo.lower(), self.colores_nodos["default"])
+        rectangulo.setBrush(QBrush(QColor(color)))
+        rectangulo.setPen(QPen(QColor("#000000"), 2))
+        self.escena.addItem(rectangulo)
 
         # Texto del nodo
         texto_valor = nodo.valor if nodo.valor else nodo.tipo
-        texto = QGraphicsTextItem(texto_valor)
-        texto.setFont(QFont("Arial", 10, QFont.Bold))
-        texto.setDefaultTextColor(QColor("#FFFFFF"))
+        texto_item = QGraphicsTextItem(texto_valor)
+        texto_item.setFont(QFont("Arial", 10))
+        texto_item.setDefaultTextColor(QColor("#000000"))
 
-        # Centrar texto
-        texto_x = nodo.x - texto.boundingRect().width() / 2
-        texto_y = nodo.y - texto.boundingRect().height() / 2
-        texto.setPos(texto_x, texto_y)
-        self.addItem(texto)
-
-        # Número de orden según el tipo de recorrido
-        orden = 0
-        if self.modo_recorrido == "preorden":
-            orden = nodo.orden_preorden
-        elif self.modo_recorrido == "inorden":
-            orden = nodo.orden_inorden
-        else:  # postorden
-            orden = nodo.orden_postorden
-
-        # Crear círculo para el orden
-        circulo_orden = QGraphicsEllipseItem(nodo.x + radio - 10, nodo.y - radio - 20, 20, 20)
-
-        # Color del círculo según tipo de recorrido
-        if self.modo_recorrido == "preorden":
-            circulo_orden.setBrush(QBrush(QColor("#569CD6")))  # Azul
-        elif self.modo_recorrido == "inorden":
-            circulo_orden.setBrush(QBrush(QColor("#4EC9B0")))  # Verde
-        else:  # postorden
-            circulo_orden.setBrush(QBrush(QColor("#C586C0")))  # Morado
-
-        circulo_orden.setPen(QPen(QColor("#FFFFFF"), 1))
-        self.addItem(circulo_orden)
-
-        # Texto del orden
-        texto_orden = QGraphicsTextItem(str(orden))
-        texto_orden.setFont(QFont("Arial", 10, QFont.Bold))
-        texto_orden.setDefaultTextColor(QColor("#FFFFFF"))
-
-        # Centrar texto del orden
-        texto_orden_x = nodo.x + radio - 5
-        if orden >= 10:
-            texto_orden_x -= 3
-        texto_orden.setPos(texto_orden_x, nodo.y - radio - 18)
-        self.addItem(texto_orden)
-
-        # Dibujar nodos hijos
-        for hijo in nodo.hijos:
-            self._dibujar_nodos(hijo)
-
-    def _dibujar_leyenda(self):
-        """Dibuja una leyenda con los diferentes tipos de nodos"""
-        y_pos = 60
-        x_pos = 50
-
-        # Título
-        titulo = QGraphicsTextItem("Tipos de nodos:")
-        titulo.setFont(QFont("Arial", 12, QFont.Bold))
-        titulo.setDefaultTextColor(QColor("#FFFFFF"))
-        titulo.setPos(x_pos, y_pos)
-        self.addItem(titulo)
-
-        y_pos += 30
-
-        # Seleccionar algunos tipos importantes para la leyenda
-        tipos_leyenda = [
-            ("programa", "Programa"),
-            ("declaraciones", "Declaraciones"),
-            ("instrucciones", "Instrucciones"),
-            ("condicionales", "Condicionales"),
-            ("bucles", "Bucles")
-        ]
-
-        for tipo, nombre in tipos_leyenda:
-            # Dibujar círculo pequeño
-            color = self.colores_tipos.get(tipo, "#808080")
-            circulo = QGraphicsEllipseItem(x_pos, y_pos, 15, 15)
-            circulo.setBrush(QBrush(QColor(color)))
-            circulo.setPen(QPen(QColor("#FFFFFF"), 1))
-            self.addItem(circulo)
-
-            # Texto
-            texto = QGraphicsTextItem(nombre)
-            texto.setFont(QFont("Arial", 10))
-            texto.setDefaultTextColor(QColor("#FFFFFF"))
-            texto.setPos(x_pos + 25, y_pos - 2)
-            self.addItem(texto)
-
-            y_pos += 20
+        # Centrar texto en el nodo
+        texto_width = texto_item.boundingRect().width()
+        texto_height = texto_item.boundingRect().height()
+        texto_item.setPos(x + 50 - texto_width / 2, y + 20 - texto_height / 2)
+        self.escena.addItem(texto_item)
 
 
-# Ventana principal para mostrar los árboles
+# Ventana principal para visualizar los árboles
 class VisualizadorArbol(QDialog):
     def __init__(self, arbol, parent=None):
         super(VisualizadorArbol, self).__init__(parent)
-        self.setWindowTitle("Visualizador de Árboles y Recorridos")
-        self.setMinimumSize(1000, 700)
-        self.setModal(True)  # Modal para bloquear la ventana principal
+        self.setWindowTitle("Visualizador de Árboles - Recorridos")
+        self.setMinimumSize(1400, 800)
+        self.setModal(True)
 
         # Guardar el árbol
         self.arbol = arbol
@@ -617,10 +344,11 @@ class VisualizadorArbol(QDialog):
         # Configurar interfaz
         self._configurar_ui()
 
-        # Mostrar árbol inicial (pre-orden)
+        # Mostrar el árbol inicial (pre-orden)
         self._mostrar_arbol("preorden")
 
     def _configurar_ui(self):
+        """Configura la interfaz de usuario"""
         # Layout principal
         layout_principal = QVBoxLayout(self)
 
@@ -633,36 +361,74 @@ class VisualizadorArbol(QDialog):
         self.tab_postorden = QWidget()
 
         # Crear vistas para cada recorrido
-        self.vista_preorden = QGraphicsView()
-        self.vista_inorden = QGraphicsView()
-        self.vista_postorden = QGraphicsView()
+        self.vista_preorden = VistaArbolGrafica()
+        self.vista_inorden = VistaArbolGrafica()
+        self.vista_postorden = VistaArbolGrafica()
 
-        # Crear escenas para cada recorrido
-        self.escena_preorden = VistaArbol()
-        self.escena_inorden = VistaArbol()
-        self.escena_postorden = VistaArbol()
-
-        # Establecer escenas en las vistas
-        self.vista_preorden.setScene(self.escena_preorden)
-        self.vista_inorden.setScene(self.escena_inorden)
-        self.vista_postorden.setScene(self.escena_postorden)
-
-        # Habilitar antialiasing para suavizar los gráficos
-        self.vista_preorden.setRenderHint(QPainter.Antialiasing)
-        self.vista_inorden.setRenderHint(QPainter.Antialiasing)
-        self.vista_postorden.setRenderHint(QPainter.Antialiasing)
+        # Dibujar los árboles
+        # Los dibujantes se encargan de las escenas
+        self.dibujante_preorden = DibujanteArbol(self.vista_preorden.escena, "preorden")
+        self.dibujante_inorden = DibujanteArbol(self.vista_inorden.escena, "inorden")
+        self.dibujante_postorden = DibujanteArbol(self.vista_postorden.escena, "postorden")
 
         # Layouts para cada pestaña
-        self.layout_preorden = QVBoxLayout(self.tab_preorden)
-        self.layout_inorden = QVBoxLayout(self.tab_inorden)
-        self.layout_postorden = QVBoxLayout(self.tab_postorden)
+        layout_preorden = QVBoxLayout(self.tab_preorden)
+        layout_inorden = QVBoxLayout(self.tab_inorden)
+        layout_postorden = QVBoxLayout(self.tab_postorden)
 
-        # Agregar vistas a los layouts de las pestañas
-        self.layout_preorden.addWidget(self.vista_preorden)
-        self.layout_inorden.addWidget(self.vista_inorden)
-        self.layout_postorden.addWidget(self.vista_postorden)
+        # Agregar controles de zoom a cada pestaña
+        toolbar_preorden = QToolBar("Zoom")
+        accion_zoom_in_preorden = QAction("Zoom +", self)
+        accion_zoom_in_preorden.triggered.connect(lambda: self._zoom_in(self.vista_preorden))
+        accion_zoom_out_preorden = QAction("Zoom -", self)
+        accion_zoom_out_preorden.triggered.connect(lambda: self._zoom_out(self.vista_preorden))
+        accion_reset_preorden = QAction("Reset Zoom", self)
+        accion_reset_preorden.triggered.connect(lambda: self._reset_zoom(self.vista_preorden))
+        toolbar_preorden.addAction(accion_zoom_in_preorden)
+        toolbar_preorden.addAction(accion_zoom_out_preorden)
+        toolbar_preorden.addAction(accion_reset_preorden)
 
-        # Agregar pestañas con nombres Unicode
+        toolbar_inorden = QToolBar("Zoom")
+        accion_zoom_in_inorden = QAction("Zoom +", self)
+        accion_zoom_in_inorden.triggered.connect(lambda: self._zoom_in(self.vista_inorden))
+        accion_zoom_out_inorden = QAction("Zoom -", self)
+        accion_zoom_out_inorden.triggered.connect(lambda: self._zoom_out(self.vista_inorden))
+        accion_reset_inorden = QAction("Reset Zoom", self)
+        accion_reset_inorden.triggered.connect(lambda: self._reset_zoom(self.vista_inorden))
+        toolbar_inorden.addAction(accion_zoom_in_inorden)
+        toolbar_inorden.addAction(accion_zoom_out_inorden)
+        toolbar_inorden.addAction(accion_reset_inorden)
+
+        toolbar_postorden = QToolBar("Zoom")
+        accion_zoom_in_postorden = QAction("Zoom +", self)
+        accion_zoom_in_postorden.triggered.connect(lambda: self._zoom_in(self.vista_postorden))
+        accion_zoom_out_postorden = QAction("Zoom -", self)
+        accion_zoom_out_postorden.triggered.connect(lambda: self._zoom_out(self.vista_postorden))
+        accion_reset_postorden = QAction("Reset Zoom", self)
+        accion_reset_postorden.triggered.connect(lambda: self._reset_zoom(self.vista_postorden))
+        toolbar_postorden.addAction(accion_zoom_in_postorden)
+        toolbar_postorden.addAction(accion_zoom_out_postorden)
+        toolbar_postorden.addAction(accion_reset_postorden)
+
+        # Etiquetas informativas
+        label_preorden = QLabel("Instrucciones: Usa el ratón para hacer zoom (rueda) y desplazarte (clic y arrastrar)")
+        label_inorden = QLabel("Instrucciones: Usa el ratón para hacer zoom (rueda) y desplazarte (clic y arrastrar)")
+        label_postorden = QLabel("Instrucciones: Usa el ratón para hacer zoom (rueda) y desplazarte (clic y arrastrar)")
+
+        # Agregar vistas y controles a los layouts
+        layout_preorden.addWidget(toolbar_preorden)
+        layout_preorden.addWidget(label_preorden)
+        layout_preorden.addWidget(self.vista_preorden)
+
+        layout_inorden.addWidget(toolbar_inorden)
+        layout_inorden.addWidget(label_inorden)
+        layout_inorden.addWidget(self.vista_inorden)
+
+        layout_postorden.addWidget(toolbar_postorden)
+        layout_postorden.addWidget(label_postorden)
+        layout_postorden.addWidget(self.vista_postorden)
+
+        # Agregar pestañas al widget de pestañas
         self.tab_widget.addTab(self.tab_preorden, "Pre-orden")
         self.tab_widget.addTab(self.tab_inorden, "In-orden")
         self.tab_widget.addTab(self.tab_postorden, "Post-orden")
@@ -670,9 +436,24 @@ class VisualizadorArbol(QDialog):
         # Conectar cambio de pestaña
         self.tab_widget.currentChanged.connect(self._cambiar_pestana)
 
-        # Agregar elementos al layout principal
+        # Agregar pestañas al layout principal
         layout_principal.addWidget(self.tab_widget)
 
+    def _zoom_in(self, vista):
+        """Aumenta el zoom de la vista"""
+        vista.scale(1.2, 1.2)
+        vista.escala *= 1.2
+
+    def _zoom_out(self, vista):
+        """Reduce el zoom de la vista"""
+        vista.scale(1 / 1.2, 1 / 1.2)
+        vista.escala /= 1.2
+
+    def _reset_zoom(self, vista):
+        """Restaura el zoom original"""
+        factor = 1.0 / vista.escala
+        vista.scale(factor, factor)
+        vista.escala = 1.0
 
     def _cambiar_pestana(self, indice):
         """Maneja el cambio de pestañas"""
@@ -684,11 +465,11 @@ class VisualizadorArbol(QDialog):
             self._mostrar_arbol("postorden")
 
     def _mostrar_arbol(self, tipo):
-        """Muestra el árbol con el recorrido especificado"""
-        # Dibujar árboles en cada pestaña
-        self.escena_preorden.dibujar_arbol(self.arbol, "preorden")
-        self.escena_inorden.dibujar_arbol(self.arbol, "inorden")
-        self.escena_postorden.dibujar_arbol(self.arbol, "postorden")
+        """Muestra el árbol con el tipo de recorrido especificado"""
+        # Dibujar árboles
+        self.dibujante_preorden.dibujar_arbol(self.arbol)
+        self.dibujante_inorden.dibujar_arbol(self.arbol)
+        self.dibujante_postorden.dibujar_arbol(self.arbol)
 
         # Cambiar a la pestaña correspondiente
         if tipo == "preorden":
@@ -698,31 +479,31 @@ class VisualizadorArbol(QDialog):
         else:
             self.tab_widget.setCurrentIndex(2)
 
-        # Ajustar vista
-        self.vista_preorden.fitInView(self.escena_preorden.itemsBoundingRect(), Qt.KeepAspectRatio)
-        self.vista_inorden.fitInView(self.escena_inorden.itemsBoundingRect(), Qt.KeepAspectRatio)
-        self.vista_postorden.fitInView(self.escena_postorden.itemsBoundingRect(), Qt.KeepAspectRatio)
+        # Ajustar vistas
+        self.vista_preorden.fitInView(self.vista_preorden.scene().itemsBoundingRect(), Qt.KeepAspectRatio)
+        self.vista_inorden.fitInView(self.vista_inorden.scene().itemsBoundingRect(), Qt.KeepAspectRatio)
+        self.vista_postorden.fitInView(self.vista_postorden.scene().itemsBoundingRect(), Qt.KeepAspectRatio)
 
     def resizeEvent(self, event):
-        """Asegura que el árbol se ajuste correctamente al cambiar el tamaño de la ventana"""
+        """Ajusta la vista al cambiar el tamaño de la ventana"""
         super(VisualizadorArbol, self).resizeEvent(event)
 
-        # Ajustar todas las vistas
-        self.vista_preorden.fitInView(self.escena_preorden.itemsBoundingRect(), Qt.KeepAspectRatio)
-        self.vista_inorden.fitInView(self.escena_inorden.itemsBoundingRect(), Qt.KeepAspectRatio)
-        self.vista_postorden.fitInView(self.escena_postorden.itemsBoundingRect(), Qt.KeepAspectRatio)
+        # Ajustar vistas
+        self.vista_preorden.fitInView(self.vista_preorden.scene().itemsBoundingRect(), Qt.KeepAspectRatio)
+        self.vista_inorden.fitInView(self.vista_inorden.scene().itemsBoundingRect(), Qt.KeepAspectRatio)
+        self.vista_postorden.fitInView(self.vista_postorden.scene().itemsBoundingRect(), Qt.KeepAspectRatio)
 
 
-# Función principal para mostrar el visualizador
+# Función principal para mostrar el visualizador de árboles
 def mostrar_arbol_recorridos(codigo, parent=None):
     """
     Función principal que crea y muestra el visualizador de recorridos de árboles
     """
     try:
         # Crear árbol
-        arbol = ArbolBinario()
+        arbol = Arbol()
 
-        # Construir árbol desde el código usando la nueva implementación
+        # Construir árbol desde el código
         resultado = arbol.construir_de_codigo(codigo)
 
         if not resultado:
@@ -753,12 +534,13 @@ def mostrar_arbol_recorridos(codigo, parent=None):
 
         return False
 
+
 # Para pruebas independientes
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
-    # Crear árbol
-    arbol = ArbolBinario()
+    # Crear árbol de ejemplo
+    arbol = Arbol()
     arbol.crear_arbol_ejemplo()
 
     # Mostrar visualizador
