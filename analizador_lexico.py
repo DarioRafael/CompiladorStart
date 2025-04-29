@@ -70,12 +70,12 @@ class TablaSimbolos:
         self.alcance_actual = ['global']
 
     def verificar_uso(self):
-        """Verifica si todos los símbolos han sido usados"""
-        no_usados = []
-        for nombre, info in self.simbolos.items():
-            if not info['usado'] and info['tipo'] not in ('CLASS', 'METHOD'):
-                no_usados.append((nombre, info))
-        return no_usados
+        return [
+            (nombre, info) for nombre, info in self.simbolos.items()
+            if not info.get('usado', False) and
+               info['tipo'] not in ['CLASS', 'METHOD'] and
+               nombre != 'args'  # Ignorar específicamente 'args'
+        ]
 
 
 # Inicializar la tabla de símbolos

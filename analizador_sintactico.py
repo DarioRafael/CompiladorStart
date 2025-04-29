@@ -121,13 +121,21 @@ def p_parametros(p):
                   | parametros COMA tipo IDENTIFICADOR
                   | STRING CORIZQ CORDER IDENTIFICADOR
                   | empty'''
-    # Registrar los parámetros como variables
     if len(p) == 3:  # tipo IDENTIFICADOR
-        tabla_simbolos.agregar(p[2], p[1], p.lineno(2))
+        # Si es específicamente String[], lo marcamos como un caso especial
+        if p[1] == 'String' and p[2] == 'args':
+            # No agregamos a tabla de símbolos ni generamos advertencia
+            pass
+        else:
+            tabla_simbolos.agregar(p[2], p[1], p.lineno(2))
     elif len(p) == 5 and p[1] != 'String':  # parametros COMA tipo IDENTIFICADOR
         tabla_simbolos.agregar(p[4], p[3], p.lineno(4))
     elif len(p) == 5:  # STRING CORIZQ CORDER IDENTIFICADOR
-        tabla_simbolos.agregar(p[4], 'String[]', p.lineno(4))
+        # Si es específicamente args, no lo marcamos como no usado
+        if p[4] == 'args':
+            pass
+        else:
+            tabla_simbolos.agregar(p[4], 'String[]', p.lineno(4))
 
     p[0] = "Parámetros válidos"
 
@@ -177,6 +185,11 @@ def p_declaracion_variable(p):
                             | tipo IDENTIFICADOR CORIZQ CORDER ASIGNAR NEW tipo CORIZQ expresion CORDER
                             | tipo IDENTIFICADOR CORIZQ CORDER ASIGNAR LLAIZQ lista_expresiones LLADER
                             | tipo IDENTIFICADOR CORIZQ expresion CORDER'''
+    # Verificar que el tipo sea un tipo válido
+    tipos_validos = ['int', 'boolean', 'char', 'byte', 'short', 'long', 'float', 'double', 'String']
+    if p[1] not in tipos_validos:
+        resultado_gramatica.append(f"Error de sintaxis en línea {p.lineno(1)}: Tipo de variable no válido '{p[1]}'")
+
     # Registrar la variable en la tabla de símbolos
     nombre = p[2]
     tipo = p[1]
@@ -534,7 +547,8 @@ def prueba_sintactica(data):
         # Verificar variables declaradas pero no utilizadas
         variables_sin_usar = tabla_simbolos.verificar_uso()
         for nombre, info in variables_sin_usar:
-            if info['tipo'] not in ['CLASS', 'METHOD']:  # No reportar clases o métodos no utilizados
+            # Agregar condición para ignorar específicamente 'args'
+            if info['tipo'] not in ['CLASS', 'METHOD'] and nombre != 'args':
                 resultado_gramatica.append(
                     f"Advertencia: Variable '{nombre}' declarada en línea {info['linea']} pero no utilizada")
 

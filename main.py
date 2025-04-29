@@ -374,7 +374,7 @@ class Main(QMainWindow):
 
     def generar_arbol(self):
         """
-        Genera y muestra el árbol de derivación mejorado
+        Genera y muestra los recorridos del árbol (pre-orden, in-orden, post-orden)
         """
         # Obtener el código fuente
         codigo = self.home.tx_ingreso.toPlainText().strip()
@@ -388,7 +388,7 @@ class Main(QMainWindow):
             respuesta = QMessageBox.question(
                 self,
                 "Realizar análisis sintáctico",
-                "Es necesario realizar un análisis sintáctico antes de generar el árbol. ¿Desea realizar el análisis sintáctico ahora?",
+                "Es necesario realizar un análisis sintáctico antes de generar los recorridos. ¿Desea realizar el análisis sintáctico ahora?",
                 QMessageBox.Yes | QMessageBox.No
             )
 
@@ -404,21 +404,24 @@ class Main(QMainWindow):
         self.home.treeWidget.clear()
 
         # Establecer estilo para el encabezado del árbol
-        self.home.treeWidget.setHeaderLabel("Árbol de Derivación")
+        self.home.treeWidget.setHeaderLabel("Recorridos del Árbol")
         header_font = QFont("Consolas", 12, QFont.Bold)
         self.home.treeWidget.headerItem().setFont(0, header_font)
         self.home.treeWidget.headerItem().setForeground(0, QBrush(QColor('#F89406')))  # Naranja
 
         try:
-            # Generar árbol mejorado
-            resultado = visualizar_arbol_derivacion_mejorado(codigo, self.home.treeWidget)
+            # Importar la función de visualización de recorridos
+            from recorridos_arbol import visualizar_recorridos_arbol
+
+            # Generar recorridos
+            resultado = visualizar_recorridos_arbol(codigo, self.home.treeWidget)
 
             if not resultado:
                 QMessageBox.warning(
                     self,
-                    "Error al generar árbol",
-                    "No se pudo generar el árbol de derivación debido a errores sintácticos. " +
-                    "Corrija los errores antes de intentar generar el árbol."
+                    "Error al generar recorridos",
+                    "No se pudieron generar los recorridos debido a errores sintácticos. " +
+                    "Corrija los errores antes de intentar generar los recorridos."
                 )
                 return
 
@@ -426,15 +429,16 @@ class Main(QMainWindow):
             self.home.analysisTabs.setCurrentIndex(3)
 
             # Actualizar la barra de estado
-            self.home.estado.showMessage("Árbol de derivación detallado generado correctamente")
+            self.home.estado.showMessage(
+                "Recorridos del árbol generados correctamente (Pre-orden, In-orden, Post-orden)")
 
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Error al generar el árbol de derivación: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Error al generar los recorridos del árbol: {str(e)}")
             self.home.estado.showMessage(f"Error: {str(e)}")
 
     def generar_arbol_lr(self):
         """
-        Genera y muestra el árbol de derivación LR en una ventana separada
+        Genera y muestra árboles jerárquicos con los tres tipos de recorridos
         """
         # Obtener el código fuente
         codigo = self.home.tx_ingreso.toPlainText().strip()
@@ -448,7 +452,7 @@ class Main(QMainWindow):
             respuesta = QMessageBox.question(
                 self,
                 "Realizar análisis sintáctico",
-                "Es necesario realizar un análisis sintáctico antes de generar el árbol LR. ¿Desea realizar el análisis sintáctico ahora?",
+                "Es necesario realizar un análisis sintáctico antes de generar los árboles. ¿Desea realizar el análisis sintáctico ahora?",
                 QMessageBox.Yes | QMessageBox.No
             )
 
@@ -461,25 +465,26 @@ class Main(QMainWindow):
                 return
 
         try:
-            # Mostrar el árbol LR en una ventana separada
-            exito = mostrar_arbol_lr(codigo, self)
+            # Importar la función de visualización de árboles de `arbol_visual.py`
+            from arbol_visual import mostrar_arbol_recorridos
 
-            if not exito:
+            # Generar y mostrar el árbol
+            resultado = mostrar_arbol_recorridos(codigo, self)
+
+            if not resultado:
                 QMessageBox.warning(
                     self,
-                    "Error al generar árbol LR",
-                    "No se pudo generar el árbol de derivación LR debido a errores sintácticos. " +
-                    "Corrija los errores antes de intentar generar el árbol."
+                    "Error al generar árbol",
+                    "No se pudo generar el árbol debido a errores en el código. Corrija los errores antes de intentar nuevamente."
                 )
                 return
 
             # Actualizar la barra de estado
-            self.home.estado.showMessage("Árbol de derivación LR generado en ventana separada")
+            self.home.estado.showMessage("Árbol generado correctamente.")
 
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Error al generar el árbol de derivación LR: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Error al generar el árbol: {str(e)}")
             self.home.estado.showMessage(f"Error: {str(e)}")
-
     def mostrar_tabla_simbolos(self):
         """
         Muestra la tabla de símbolos actual

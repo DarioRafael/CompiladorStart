@@ -266,17 +266,17 @@ class Ui_home(object):
 
         # Crear un árbol para mostrar el árbol de derivación
         self.treeWidget = QtWidgets.QTreeWidget()
-        self.treeWidget.setHeaderLabel("Árbol de Derivación")
+        self.treeWidget.setHeaderLabel("Recorridos del Árbol")  # Actualizado
         self.treeWidget.setColumnCount(1)
         self.treeWidget.setHeaderHidden(False)
-        self.treeWidget.header().setDefaultSectionSize(300)
+        self.treeWidget.header().setDefaultSectionSize(400)  # Aumentado para acomodar más texto
         self.treeWidget.header().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
         self.treeWidget.setIndentation(25)  # Sangría para niveles jerárquicos
         self.treeWidget.setAnimated(True)  # Animaciones al expandir/colapsar
         self.treeWidget.setFont(QtGui.QFont("Consolas", 11))
 
         self.parseTreeLayout.addWidget(self.treeWidget)
-        self.analysisTabs.addTab(self.parseTreeTab, "Árbol de Derivación")
+        self.analysisTabs.addTab(self.parseTreeTab, "Recorridos del Árbol")  # Actualizado
 
         self.mainLayout.addWidget(self.analysisTabs)
 
@@ -320,8 +320,7 @@ class Ui_home(object):
             }
         """)
 
-        self.bt_arbol = QtWidgets.QPushButton("Generar Árbol")
-
+        self.bt_arbol = QtWidgets.QPushButton("Generar Recorridos")  # Actualizado
         self.bt_arbol.setIcon(QtGui.QIcon.fromTheme("view-list-tree"))
         self.bt_arbol.setStyleSheet("""
             QPushButton {
@@ -335,7 +334,6 @@ class Ui_home(object):
 
         self.bt_arbolLR = QtWidgets.QPushButton("Generar Árbol LR")
         self.bt_arbol_lr = self.bt_arbolLR
-
 
         self.bottomControls.addWidget(self.bt_lexico)
         self.bottomControls.addWidget(self.bt_sintactico)
@@ -372,21 +370,22 @@ class Ui_home(object):
         self.retranslateUi(home)
         QtCore.QMetaObject.connectSlotsByName(home)
 
+    # Actualizaciones para el método retranslateUi en la clase Ui_home
     def retranslateUi(self, home):
         _translate = QtCore.QCoreApplication.translate
         home.setWindowTitle(_translate("home", "Analizador de Código Java"))
         self.analysisTabs.setTabText(0, _translate("home", "Análisis Léxico"))
         self.analysisTabs.setTabText(1, _translate("home", "Análisis Sintáctico"))
         self.analysisTabs.setTabText(2, _translate("home", "Tabla de Símbolos"))
-        self.analysisTabs.setTabText(3, _translate("home", "Árbol de Derivación"))
+        self.analysisTabs.setTabText(3, _translate("home", "Recorridos del Árbol"))
         self.bt_lexico.setText(_translate("home", "Analizar Léxico"))
         self.bt_lexico.setToolTip(_translate("home", "Realizar análisis léxico (F5)"))
         self.bt_sintactico.setText(_translate("home", "Analizar Sintaxis"))
         self.bt_sintactico.setToolTip(_translate("home", "Realizar análisis sintáctico (F6)"))
         self.bt_simbolos.setText(_translate("home", "Ver Tabla Símbolos"))
         self.bt_simbolos.setToolTip(_translate("home", "Mostrar tabla de símbolos"))
-        self.bt_arbol.setText(_translate("home", "Generar Árbol"))
-        self.bt_arbol.setToolTip(_translate("home", "Generar árbol de derivación (F7)"))
+        self.bt_arbol.setText(_translate("home", "Visualizar Recorridos"))  # Actualizado
+        self.bt_arbol.setToolTip(_translate("home", "Visualización gráfica de recorridos: pre-orden, in-orden y post-orden (F7)"))  # Actualizado
         self.bt_archivo.setText(_translate("home", "Cargar Archivo"))
         self.bt_archivo.setToolTip(_translate("home", "Abrir un archivo Java (Ctrl+O)"))
         self.bt_limpiar.setText(_translate("home", "Limpiar"))
