@@ -175,8 +175,6 @@ class Ui_home(object):
         self.tx_ingreso = CodeEditor()
 
         self.tx_ingreso.setPlaceholderText("Escribe tu código Java aquí o carga un archivo...")
-        self.tx_ingreso.setLineWrapMode(QtWidgets.QTextEdit.NoWrap)
-        self.tx_ingreso.setTabStopWidth(40)  # 4 espacios para tabs
         self.sourceLayout.addWidget(self.tx_ingreso)
         self.mainLayout.addWidget(self.sourceGroup)
 

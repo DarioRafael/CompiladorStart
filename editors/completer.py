@@ -27,6 +27,13 @@ SNIPPETS = {
     "fori": "for (int i = 0; i < $0; i++) {\n}",
     "if": "if ($0) {\n}",
     "else": "else {\n    $0\n}",
+    "!": (
+        "public class Main {\n"
+        "    public static void main(String[] args) {\n"
+        "        $0\n"
+        "    }\n"
+        "}"
+    ),
 }
 
 _word_re = re.compile(r"[A-Za-z_][A-Za-z_0-9]*$")
@@ -75,7 +82,7 @@ class JavaAutoCompleter(QObject):
         # Aceptar con activado (Enter/clic cuando el popup tiene foco)
         self.completer.activated[str].connect(self._insert_completion)
         # Aceptar también con clic aunque el foco lo tenga el editor
-        self.completer.popup().clicked.connect(self._on_popup_clicked)
+       # self.completer.popup().clicked.connect(self._on_popup_clicked)
 
         self.completer.popup().installEventFilter(self)
 

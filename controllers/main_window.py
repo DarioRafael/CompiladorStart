@@ -2,6 +2,7 @@
 import os
 from PyQt5.QtWidgets import QMainWindow, QFileDialog, QTableWidgetItem, QMessageBox, QTextEdit, QPlainTextEdit
 from PyQt5.QtGui import QColor, QBrush, QFont, QTextCharFormat, QTextCursor
+
 # Ui (tu archivo existente)
 from view.home import Ui_home
 
@@ -397,7 +398,6 @@ class Main(QMainWindow):
         self.home.analysisTabs.setCurrentIndex(2)
 
     def _apply_diagnostics(self, errors):
-        """Subraya rango(s) con wave underline rojo."""
         edit = self.home.tx_ingreso
         selections = []
 
@@ -414,18 +414,16 @@ class Main(QMainWindow):
             cur.setPosition(start)
             cur.setPosition(start + length, QTextCursor.KeepAnchor)
 
-            # ✅ crea la ExtraSelection desde la clase base correcta
-            if isinstance(edit, QPlainTextEdit):
-                sel = QPlainTextEdit.ExtraSelection()
-            else:
-                sel = QTextEdit.ExtraSelection()
-
+            sel = QTextEdit.ExtraSelection()  # ✅ siempre esta clase
             sel.cursor = cur
             sel.format = fmt
             selections.append(sel)
 
-        # Limpia y aplica
-        edit.setExtraSelections(selections)
+        # deja que CodeEditor componga con sus propios highlights
+        try:
+            edit.setExtraSelections(selections)
+        except Exception:
+            edit.setExtraSelections(selections)
 
     def _run_live_diagnostics(self):
         code = self.home.tx_ingreso.toPlainText()
@@ -500,8 +498,7 @@ class Main(QMainWindow):
             try:
                 with open(nombre_archivo, 'r', encoding='utf-8') as f:
                     contenido = f.read()
-                    self.home.tx_ingreso.setText(contenido)
-
+                    self.home.tx_ingreso.setPlainText(contenido)
                 self.home.estado.showMessage(f"Archivo cargado: {os.path.basename(nombre_archivo)}")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"No se pudo abrir el archivo: {str(e)}")

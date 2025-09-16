@@ -1,117 +1,232 @@
 # -*- coding: utf-8 -*-
-
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 
-class CodeEditor(QtWidgets.QWidget):
+class LineNumberArea(QtWidgets.QWidget):
+    def __init__(self, editor):
+        super().__init__(editor)
+        self._editor = editor
+
+    def sizeHint(self):
+        return QtCore.QSize(self._editor.lineNumberAreaWidth(), 0)
+
+    def paintEvent(self, event):
+        self._editor.lineNumberAreaPaintEvent(event)
+
+
+class CodeEditor(QtWidgets.QPlainTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        # Layout principal
-        layout = QtWidgets.QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        # ==== Básico ====
+        self.setLineWrapMode(QtWidgets.QPlainTextEdit.NoWrap)
+        self.setTabStopDistance(4 * self.fontMetrics().width(" "))
 
-        # Área de números de línea
-        self.line_numbers = QtWidgets.QTextEdit()
-        self.line_numbers.setReadOnly(True)
-        self.line_numbers.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        self.line_numbers.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        font = QtGui.QFont("Consolas", 11)
+        self.setFont(font)
 
-        # Área de texto principal
-        self.text_edit = QtWidgets.QTextEdit()
+        pal = self.palette()
+        pal.setColor(QtGui.QPalette.Base, QtGui.QColor("#1E1E1E"))
+        pal.setColor(QtGui.QPalette.Text, QtGui.QColor("#DCDCDC"))
+        self.setPalette(pal)
 
-        # Estilos
-        self.setStyleSheet("""
-            QTextEdit { 
-                background-color: #1E1E1E; 
-                color: #DCDCDC; 
-                border: 2px solid #3E3E3E;
-                border-radius: 4px;
-                padding: 10px;
-                font-family: 'Consolas', 'Courier New', monospace;
-                font-size: 13px;
-            }
-        """)
+        # ==== Contenedores para extraSelections ====
+        self._externalExtraSelections = []
+        self._trailing_extras = []
+        self._brace_extras = []
+        self._error_lines = set()
 
-        # Estilos específicos para números de línea
-        self.line_numbers.setStyleSheet("""
-            background-color: #252526; 
-            color: #858585; 
-            border: none;
-            padding-right: 5px;
-            text-align: right;
-        """)
+        # ==== Área de números de línea ====
+        self._lineNumberArea = LineNumberArea(self)
+        self.blockCountChanged.connect(self._updateLineNumberAreaWidth)
+        self.updateRequest.connect(self._updateLineNumberArea)
+        self.cursorPositionChanged.connect(self._onCursorMoved)
+        self._updateLineNumberAreaWidth(0)
 
-        # Sincronizar desplazamiento
-        self.text_edit.verticalScrollBar().valueChanged.connect(
-            self.line_numbers.verticalScrollBar().setValue
-        )
-        self.line_numbers.verticalScrollBar().valueChanged.connect(
-            self.text_edit.verticalScrollBar().setValue
-        )
+        # ==== Inicializaciones ====
+        self._init_indent_guides()
+        self._init_ruler()
+        self._init_trailing_ws()
+        self._init_brace_match()
+        self._init_current_line_highlight()
 
-        # Configuraciones iniciales
-        self.text_edit.setLineWrapMode(QtWidgets.QTextEdit.NoWrap)
-        self.line_numbers.setLineWrapMode(QtWidgets.QTextEdit.NoWrap)
+        # Eventos de cambio de texto
+        self.textChanged.connect(self._update_trailing_ws_highlight)
 
-        # Conectar señales para actualizar números de línea
-        self.text_edit.textChanged.connect(self.update_line_numbers)
+        # ==== Scrollbars ====
+        self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
 
-        # Añadir widgets al layout
-        layout.addWidget(self.line_numbers)
-        layout.addWidget(self.text_edit)
+        # Composición inicial
+        self._recompose_extras()
 
-        # Establecer anchos de columna
-        layout.setStretchFactor(self.line_numbers, 1)
-        layout.setStretchFactor(self.text_edit, 10)
+    # =========================================================
+    # Área de números de línea
+    # =========================================================
+    def lineNumberAreaWidth(self):
+        digits = len(str(max(1, self.blockCount())))
+        return 10 + self.fontMetrics().width("9") * digits
 
-    def update_line_numbers(self):
-        """Actualiza los números de línea"""
-        # Obtener el número de líneas
-        line_count = self.text_edit.document().blockCount()
+    def _updateLineNumberAreaWidth(self, _):
+        self.setViewportMargins(self.lineNumberAreaWidth(), 0, 0, 0)
 
-        # Generar texto de números de línea
-        line_numbers = '\n'.join(str(i + 1) for i in range(line_count))
+    def _updateLineNumberArea(self, rect, dy):
+        if dy:
+            self._lineNumberArea.scroll(0, dy)
+        else:
+            self._lineNumberArea.update(0, rect.y(), self._lineNumberArea.width(), rect.height())
+        if rect.contains(self.viewport().rect()):
+            self._updateLineNumberAreaWidth(0)
 
-        # Establecer texto de números de línea
-        self.line_numbers.setPlainText(line_numbers)
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        cr = self.contentsRect()
+        self._lineNumberArea.setGeometry(QtCore.QRect(cr.left(), cr.top(), self.lineNumberAreaWidth(), cr.height()))
 
-    # Métodos delegados para mantener la misma interfaz que QTextEdit
-    def toPlainText(self):
-        return self.text_edit.toPlainText()
+    def lineNumberAreaPaintEvent(self, event):
+        painter = QtGui.QPainter(self._lineNumberArea)
+        painter.fillRect(event.rect(), QtGui.QColor("#252526"))
 
-    def setText(self, text):
-        self.text_edit.setText(text)
+        painter.setFont(self.font())
 
-    def setPlaceholderText(self, text):
-        self.text_edit.setPlaceholderText(text)
+        block = self.firstVisibleBlock()
+        blockNumber = block.blockNumber()
+        top = self.blockBoundingGeometry(block).translated(self.contentOffset()).top()
+        bottom = top + self.blockBoundingRect(block).height()
 
-    def clear(self):
-        self.text_edit.clear()
-        self.line_numbers.clear()
+        while block.isValid() and top <= event.rect().bottom():
+            if block.isVisible() and bottom >= event.rect().top():
+                number = str(blockNumber + 1)
+                color = QtGui.QColor("#FF6B68") if (blockNumber + 1) in self._error_lines else QtGui.QColor("#858585")
+                painter.setPen(color)
+                painter.drawText(0, int(top), self._lineNumberArea.width() - 5, self.fontMetrics().height(),
+                                 QtCore.Qt.AlignRight, number)
 
-    def setLineWrapMode(self, mode):
-        self.text_edit.setLineWrapMode(mode)
+            block = block.next()
+            top = bottom
+            bottom = top + self.blockBoundingRect(block).height()
+            blockNumber += 1
 
-    def setTabStopWidth(self, width):
-        self.text_edit.setTabStopWidth(width)
+    # =========================================================
+    # Destacados / Resaltados
+    # =========================================================
+    def _init_current_line_highlight(self):
+        self.cursorPositionChanged.connect(self._update_current_line_selection)
+        self._update_current_line_selection()
 
-    # Delegar más métodos según sea necesario
-    def __getattr__(self, name):
-        """Delegar cualquier otro método no definido explícitamente al text_edit"""
-        return getattr(self.text_edit, name)
+    def _update_current_line_selection(self):
+        selection = QtWidgets.QTextEdit.ExtraSelection()
+        lineColor = QtGui.QColor("#333333")
+        selection.format.setBackground(lineColor)
+        selection.format.setProperty(QtGui.QTextFormat.FullWidthSelection, True)
+        selection.cursor = self.textCursor()
+        selection.cursor.clearSelection()
+        self._current_line_fmt = selection
+        self._recompose_extras()
 
+    def _init_indent_guides(self):
+        pass  # Aquí podrías implementar guías de indentación
+
+    def _init_ruler(self):
+        pass  # Aquí puedes dibujar columna 80, por ejemplo
+
+    def _init_trailing_ws(self):
+        self._trailing_extras = []
+
+    def _update_trailing_ws_highlight(self):
+        self._trailing_extras = []
+        doc = self.document()
+        block = doc.firstBlock()
+        while block.isValid():
+            text = block.text()
+            m = len(text) - len(text.rstrip())
+            if m > 0:
+                sel = QtWidgets.QTextEdit.ExtraSelection()
+                sel.cursor = QtGui.QTextCursor(block)
+                sel.cursor.movePosition(QtGui.QTextCursor.EndOfBlock)
+                sel.cursor.movePosition(QtGui.QTextCursor.Left, QtGui.QTextCursor.KeepAnchor, m)
+                sel.format.setBackground(QtGui.QColor("#553333"))
+                self._trailing_extras.append(sel)
+            block = block.next()
+        self._recompose_extras()
+
+    def _init_brace_match(self):
+        self._brace_extras = []
+
+    # =========================================================
+    # ExtraSelections composition
+    # =========================================================
+    def _compose_extra_selections(self):
+        ext = self._externalExtraSelections or []
+        tr = self._trailing_extras or []
+        br = self._brace_extras or []
+        cur = [self._current_line_fmt] if hasattr(self, "_current_line_fmt") else []
+        return ext + tr + br + cur
+
+    def _recompose_extras(self):
+        super().setExtraSelections(self._compose_extra_selections())
+
+    # =========================================================
+    # Errores en gutter
+    # =========================================================
     def set_error_lines(self, lines):
         self._error_lines = set(lines or [])
-        self.update()
-        try:
-            self.lineNumberArea.update()
-        except Exception:
-            pass
+        self._lineNumberArea.update()
 
-    # Eventos de teclado y foco
-    def keyPressEvent(self, event):
-        self.text_edit.setFocus()
-        self.text_edit.keyPressEvent(event)
+    # =========================================================
+    # Eventos
+    # =========================================================
+
+    def setExtraSelections(self, selections):
+        """Captura selecciones externas (diagnósticos) y recompone con las internas."""
+        self._externalExtraSelections = list(selections or [])
+        self._recompose_extras()
+
+    def _onCursorMoved(self):
+        self._update_current_line_selection()
+
+    # ============================
+    # Zoom con Shift + rueda
+    # ============================
+    def wheelEvent(self, event: QtGui.QWheelEvent):
+        # Si mantiene Shift, usamos la rueda para zoom
+        if event.modifiers() & QtCore.Qt.ShiftModifier:
+            # angleDelta.y(): +120 por “notch” hacia arriba, -120 hacia abajo (en la mayoría de ratones)
+            delta = event.angleDelta().y()
+            if delta != 0:
+                steps = int(delta / 120) if delta % 120 == 0 else (1 if delta > 0 else -1)
+                self._apply_zoom_steps(steps)
+            # Consumimos el evento para que no haga scroll horizontal por defecto
+            event.accept()
+            return
+
+        # Comportamiento normal si no está presionando Shift
+        super().wheelEvent(event)
+
+    def _apply_zoom_steps(self, steps: int):
+        """Aumenta/disminuye el tamaño de fuente y ajusta detalles relacionados."""
+        font = self.font()
+        self._lineNumberArea.setFont(font)
+        # Usa pointSize si existe, si no, toma pixelSize y convértelo a pointSize aproximado
+        size = font.pointSize()
+        if size <= 0:
+            # fallback si el font usa pixelSize
+            size = max(8, int(font.pixelSize() / self.logicalDpiY() * 72))
+
+        new_size = max(8, min(48, size + steps))  # límites razonables 8–48 pt
+        if new_size == size:
+            return
+
+        font.setPointSize(new_size)
+        self.setFont(font)
+
+        # Ajustar tabulación al nuevo ancho del espacio
+        space_w = self.fontMetrics().width(" ")
+        self.setTabStopDistance(4 * space_w)
+
+        # Recalcular margen del área de línea y refrescar highlights
+        self._updateLineNumberAreaWidth(0)
+        self._recompose_extras()
+        self.viewport().update()
+        self._lineNumberArea.update()
 
