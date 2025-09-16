@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem,
-                             QPushButton, QLabel, QSplitter, QWidget, QScrollArea, QFrame,
-                             QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsTextItem,
-                             QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsPolygonItem,
+from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsTextItem,
+                             QGraphicsPathItem, QGraphicsPolygonItem,
                              QGraphicsDropShadowEffect)
 from PyQt5.QtGui import (QColor, QBrush, QFont, QPen, QFontMetrics, QPainter, QLinearGradient,
                          QRadialGradient, QPainterPath, QPolygonF)
-from PyQt5.QtCore import Qt, QRectF, QPointF, QSizeF, pyqtSignal, QPoint
+from PyQt5.QtCore import Qt, QPointF
 
 import math
 import re
@@ -1724,9 +1722,7 @@ def construir_arbol_lr_desde_codigo(codigo_fuente):
     Builds a detailed LR tree from source code with full grammar analysis
     Returns the root of the tree and a boolean indicating success
     """
-    from analizador_sintactico import prueba_sintactica
-    from analizador_lexico import tabla_simbolos
-    from arbol_derivacion import construir_arbol_derivacion
+    from syntactic.analizador_sintactico import prueba_sintactica
 
     try:
         # First perform syntactic analysis

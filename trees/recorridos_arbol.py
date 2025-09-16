@@ -34,8 +34,8 @@ def construir_arbol_recorridos(codigo_fuente):
     Returns:
         NodoRecorrido: El nodo raíz del árbol con sus recorridos calculados
     """
-    from analizador_sintactico import prueba_sintactica
-    from analizador_lexico import tabla_simbolos, prueba
+    from syntactic.analizador_sintactico import prueba_sintactica
+    from lexer.analizador_lexico import tabla_simbolos, prueba
 
     # Limpiar tabla de símbolos antes de análisis
     tabla_simbolos.limpiar()

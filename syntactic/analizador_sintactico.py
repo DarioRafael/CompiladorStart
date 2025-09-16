@@ -1,8 +1,7 @@
 import ply.yacc as yacc
-from analizador_lexico import tokens, tabla_simbolos
-from analizador_lexico import construir_lexer
-
-import ply.lex as lex  # Añade esta línea
+from lexer.analizador_lexico import tokens
+from lexer.analizador_lexico import tabla_simbolos
+from lexer.analizador_lexico import construir_lexer
 
 # Resultado del análisis
 resultado_gramatica = []

@@ -102,7 +102,16 @@ class CodeEditor(QtWidgets.QWidget):
         """Delegar cualquier otro método no definido explícitamente al text_edit"""
         return getattr(self.text_edit, name)
 
+    def set_error_lines(self, lines):
+        self._error_lines = set(lines or [])
+        self.update()
+        try:
+            self.lineNumberArea.update()
+        except Exception:
+            pass
+
     # Eventos de teclado y foco
     def keyPressEvent(self, event):
         self.text_edit.setFocus()
         self.text_edit.keyPressEvent(event)
+

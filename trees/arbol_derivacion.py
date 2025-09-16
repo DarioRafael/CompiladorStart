@@ -22,8 +22,8 @@ def construir_arbol_derivacion(codigo_fuente):
     """
     Construye un árbol de derivación a partir del análisis sintáctico del código
     """
-    from analizador_sintactico import prueba_sintactica
-    from analizador_lexico import tabla_simbolos
+    from syntactic.analizador_sintactico import prueba_sintactica
+    from lexer.analizador_lexico import tabla_simbolos
 
     # Limpiar tabla de símbolos antes de análisis
     tabla_simbolos.limpiar()
