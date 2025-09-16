@@ -12,6 +12,8 @@ from highlighters.java_highlighter import JavaHighlighter
 
 from diagnostics.java_diagnostics import diagnose as diag_struct
 from semantics.java_semantics import analyze_semantics as diag_sem
+from editors.completer import JavaAutoCompleter, JAVA_KEYWORDS
+
 
 class Main(QMainWindow):
     """Clase principal de la aplicación"""
@@ -29,7 +31,9 @@ class Main(QMainWindow):
         self._last_errors = []
         self.home.tx_ingreso.textChanged.connect(self._run_live_diagnostics)
         self.home.tx_ingreso.cursorPositionChanged.connect(self._maybe_show_error_in_status)
+        self.home.tx_ingreso.setTabChangesFocus(False)
 
+        self._init_autocomplete()
 
         # Conectar eventos
         self.home.bt_lexico.clicked.connect(self.ev_lexico)
@@ -191,7 +195,7 @@ class Main(QMainWindow):
             # pinta subrayado rojo
             self._last_errors = pre
             self._apply_diagnostics(pre)
-            # marcas en gutter si tu editor lo soporta
+            # marcas en gutter si tu editors lo soporta
             try:
                 if hasattr(self.home.tx_ingreso, "set_error_lines"):
                     self.home.tx_ingreso.set_error_lines(sorted({e["line"] for e in pre}))
@@ -438,7 +442,7 @@ class Main(QMainWindow):
         self._last_errors = errs
         self._apply_diagnostics(errs)
 
-        # marcas en gutter si tu editor lo soporta
+        # marcas en gutter si tu editors lo soporta
         try:
             if hasattr(self.home.tx_ingreso, "set_error_lines"):
                 self.home.tx_ingreso.set_error_lines(sorted({e["line"] for e in errs}))
@@ -457,6 +461,27 @@ class Main(QMainWindow):
             if e["start"] <= pos <= e["start"] + e["length"]:
                 self.home.estado.showMessage(f"Error (L{e['line']}:C{e['col']}): {e['message']}")
                 return
+
+    def _init_autocomplete(self):
+        # función que aporta palabras dinámicas (variables y métodos) desde la tabla de símbolos
+        def dynamic_words():
+            try:
+                syms = tabla_simbolos.obtener_todos()  # dict {nombre: info}
+                # nombres "limpios" (sin prefijo global. si tu tabla usa 'global.X', recórtalo)
+                out = []
+                for k in syms.keys():
+                    # si viniera con "scope.nombre", quita el prefijo para autocompletar
+                    name = k.split('.', 1)[1] if '.' in k else k
+                    out.append(name)
+                # agrega también palabras reservadas por si la tabla está vacía
+                out.extend(JAVA_KEYWORDS)
+                # únicos
+                out = list(dict.fromkeys(out))
+                return out
+            except Exception:
+                return list(JAVA_KEYWORDS)
+
+        self._completer = JavaAutoCompleter(self.home.tx_ingreso, dynamic_words)
 
     # -----------------------------
     # Archivo / Limpiar
