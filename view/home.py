@@ -4,6 +4,55 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from .line_numbered_textedit import CodeEditor  # Import the new CodeEditor
 
 
+class ZoomablePlainTextEdit(QtWidgets.QPlainTextEdit):
+    def __init__(self, *args, min_pt=8, max_pt=48, start_pt=11, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._min_pt = min_pt
+        self._max_pt = max_pt
+        # tamaño inicial (si no quieres tocarlo, comenta estas 2 líneas)
+        f = self.font()
+        if f.pointSize() <= 0:
+            f.setPointSize(start_pt)
+        self.setFont(f)
+
+    def _apply_zoom_steps(self, steps: int):
+        f = self.font()
+        size = f.pointSize() if f.pointSize() > 0 else max(
+            self._min_pt, int(f.pixelSize() / self.logicalDpiY() * 72)
+        )
+        new_size = max(self._min_pt, min(self._max_pt, size + steps))
+        if new_size == size:
+            return
+        f.setPointSize(new_size)
+        self.setFont(f)
+
+    def wheelEvent(self, event: QtGui.QWheelEvent):
+        if event.modifiers() & QtCore.Qt.ShiftModifier:
+            angle = event.angleDelta().y()
+            pixel = event.pixelDelta().y()
+            if angle != 0:
+                steps = int(angle / 120) if angle % 120 == 0 else (1 if angle > 0 else -1)
+            elif pixel != 0:
+                steps = 1 if pixel > 0 else -1
+            else:
+                steps = 0
+            if steps:
+                self._apply_zoom_steps(steps)
+                event.accept()
+                return
+        super().wheelEvent(event)
+
+    def keyPressEvent(self, event: QtGui.QKeyEvent):
+        if event.modifiers() & QtCore.Qt.ShiftModifier:
+            if event.key() in (QtCore.Qt.Key_Plus, QtCore.Qt.Key_Equal):
+                self._apply_zoom_steps(+1)
+                return
+            if event.key() in (QtCore.Qt.Key_Minus, QtCore.Qt.Key_Underscore):
+                self._apply_zoom_steps(-1)
+                return
+        super().keyPressEvent(event)
+
+
 class Ui_home(object):
     def setupUi(self, home):
         home.setObjectName("home")
@@ -25,7 +74,7 @@ class Ui_home(object):
                 border-radius: 4px;
                 padding: 10px;
                 font-family: 'Consolas', 'Courier New', monospace;
-                font-size: 13px;
+                
                 selection-background-color: #3E3E3E;
                 line-height: 1.3;
             }
@@ -362,7 +411,7 @@ class Ui_home(object):
         self.outputLayout.addLayout(self.outputHeader)
 
         # Consola de salida
-        self.tx_output = QtWidgets.QPlainTextEdit()
+        self.tx_output = ZoomablePlainTextEdit()
         self.tx_output.setReadOnly(True)
         self.tx_output.setPlaceholderText("Aquí aparecerá la salida del programa...")
         self.tx_output.setObjectName("tx_output_console")
@@ -511,3 +560,4 @@ class Ui_home(object):
         self.sourceGroup.setTitle(_translate("home", "Código Fuente Java"))
         self.lb_output_status.setText(_translate("home", "Salida del código (solo diseño):"))
         self.bt_output_clear.setText(_translate("home", "Limpiar salida"))
+
