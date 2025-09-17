@@ -18,7 +18,7 @@ class Ui_home(object):
                 font-family: 'Segoe UI', 'Arial', sans-serif;
             }
 
-            QTextEdit {
+            QTextEdit, QPlainTextEdit {
                 background-color: #1E1E1E;
                 color: #DCDCDC;
                 border: 2px solid #3E3E3E;
@@ -170,10 +170,7 @@ class Ui_home(object):
         """)
 
         self.sourceLayout = QtWidgets.QVBoxLayout(self.sourceGroup)
-
-        # self.tx_ingreso = QtWidgets.QTextEdit()
         self.tx_ingreso = CodeEditor()
-
         self.tx_ingreso.setPlaceholderText("Escribe tu código Java aquí o carga un archivo...")
         self.sourceLayout.addWidget(self.tx_ingreso)
         self.mainLayout.addWidget(self.sourceGroup)
@@ -193,13 +190,41 @@ class Ui_home(object):
             }
         """)
 
+        self.bt_run = QtWidgets.QPushButton("Run")
+        self.bt_run.setIcon(QtGui.QIcon.fromTheme("media-playback-start"))
+        self.bt_run.setStyleSheet("""
+            QPushButton {
+                background-color: #3279B7;
+                border-color: #3C8DCC;
+            }
+            QPushButton:hover {
+                background-color: #3C8DCC;
+            }
+        """)
+
         self.bt_limpiar = QtWidgets.QPushButton("Limpiar")
         self.bt_limpiar.setIcon(QtGui.QIcon.fromTheme("edit-clear"))
         self.bt_limpiar.setToolTip("Limpiar todo")
 
+        # === Botones de Zoom ===
+        self.bt_zoom_out = QtWidgets.QPushButton("—")  # guion largo para estética
+        self.bt_zoom_out.setFixedWidth(40)
+        self.bt_zoom_out.setToolTip("Zoom -  (Shift + “-”)")
+        self.bt_zoom_out.setStyleSheet("QPushButton { min-width: 40px; }")
+
+        self.bt_zoom_in = QtWidgets.QPushButton("+")
+        self.bt_zoom_in.setFixedWidth(40)
+        self.bt_zoom_in.setToolTip("Zoom +  (Shift + “+”)")
+        self.bt_zoom_in.setStyleSheet("QPushButton { min-width: 40px; }")
+
         self.topControls.addWidget(self.bt_archivo)
+        self.topControls.addWidget(self.bt_run)
         self.topControls.addWidget(self.bt_limpiar)
         self.topControls.addStretch()
+        # Añadimos los botones de zoom del lado derecho
+        self.topControls.addWidget(QtWidgets.QLabel("Zoom:"))
+        self.topControls.addWidget(self.bt_zoom_out)
+        self.topControls.addWidget(self.bt_zoom_in)
 
         self.mainLayout.addLayout(self.topControls)
 
@@ -211,11 +236,10 @@ class Ui_home(object):
             }
         """)
 
-        # Pestaña de análisis léxico
+        # ====== Pestaña: Análisis Léxico ======
         self.lexicalTab = QtWidgets.QWidget()
         self.lexicalLayout = QtWidgets.QVBoxLayout(self.lexicalTab)
 
-        # Usar tabla en lugar de textEdit para el análisis léxico
         self.tb_lexico = QtWidgets.QTableWidget()
         self.tb_lexico.setColumnCount(4)
         self.tb_lexico.setHorizontalHeaderLabels(["Línea", "Componente Léxico", "Lexema", "Patrón"])
@@ -227,11 +251,10 @@ class Ui_home(object):
         self.tb_lexico.setAlternatingRowColors(True)
         self.tb_lexico.setEditTriggers(QtWidgets.QTableWidget.NoEditTriggers)
         self.tb_lexico.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
-
         self.lexicalLayout.addWidget(self.tb_lexico)
         self.analysisTabs.addTab(self.lexicalTab, "Análisis Léxico")
 
-        # Pestaña de análisis sintáctico
+        # ====== Pestaña: Análisis Sintáctico ======
         self.syntaxTab = QtWidgets.QWidget()
         self.syntaxLayout = QtWidgets.QVBoxLayout(self.syntaxTab)
         self.tx_sintactico = QtWidgets.QTextEdit()
@@ -240,7 +263,7 @@ class Ui_home(object):
         self.syntaxLayout.addWidget(self.tx_sintactico)
         self.analysisTabs.addTab(self.syntaxTab, "Análisis Sintáctico")
 
-        # Pestaña de tabla de símbolos
+        # ====== Pestaña: Tabla de Símbolos ======
         self.symbolsTab = QtWidgets.QWidget()
         self.symbolsLayout = QtWidgets.QVBoxLayout(self.symbolsTab)
         self.tb_simbolos = QtWidgets.QTableWidget()
@@ -258,24 +281,96 @@ class Ui_home(object):
         self.symbolsLayout.addWidget(self.tb_simbolos)
         self.analysisTabs.addTab(self.symbolsTab, "Tabla de Símbolos")
 
-        # Nueva pestaña para el árbol de derivación
+        # ====== Pestaña: Recorridos del Árbol ======
         self.parseTreeTab = QtWidgets.QWidget()
         self.parseTreeLayout = QtWidgets.QVBoxLayout(self.parseTreeTab)
 
-        # Crear un árbol para mostrar el árbol de derivación
         self.treeWidget = QtWidgets.QTreeWidget()
-        self.treeWidget.setHeaderLabel("Recorridos del Árbol")  # Actualizado
+        self.treeWidget.setHeaderLabel("Recorridos del Árbol")
         self.treeWidget.setColumnCount(1)
         self.treeWidget.setHeaderHidden(False)
-        self.treeWidget.header().setDefaultSectionSize(400)  # Aumentado para acomodar más texto
+        self.treeWidget.header().setDefaultSectionSize(400)
         self.treeWidget.header().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
-        self.treeWidget.setIndentation(25)  # Sangría para niveles jerárquicos
-        self.treeWidget.setAnimated(True)  # Animaciones al expandir/colapsar
+        self.treeWidget.setIndentation(25)
+        self.treeWidget.setAnimated(True)
         self.treeWidget.setFont(QtGui.QFont("Consolas", 11))
 
         self.parseTreeLayout.addWidget(self.treeWidget)
-        self.analysisTabs.addTab(self.parseTreeTab, "Recorridos del Árbol")  # Actualizado
+        self.analysisTabs.addTab(self.parseTreeTab, "Recorridos del Árbol")
 
+        # ====== Pestaña: Triplos ======
+        self.triplesTab = QtWidgets.QWidget()
+        self.triplesLayout = QtWidgets.QVBoxLayout(self.triplesTab)
+
+        self.tb_triplos = QtWidgets.QTableWidget()
+        self.tb_triplos.setColumnCount(4)
+        self.tb_triplos.setHorizontalHeaderLabels(["Índice", "Operador", "Arg1", "Arg2/Resultado"])
+        self.tb_triplos.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
+        self.tb_triplos.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
+        self.tb_triplos.horizontalHeader().setSectionResizeMode(2, QtWidgets.QHeaderView.Stretch)
+        self.tb_triplos.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.Stretch)
+        self.tb_triplos.verticalHeader().setVisible(False)
+        self.tb_triplos.setAlternatingRowColors(True)
+        self.tb_triplos.setEditTriggers(QtWidgets.QTableWidget.NoEditTriggers)
+        self.tb_triplos.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.triplesLayout.addWidget(self.tb_triplos)
+
+        self.analysisTabs.addTab(self.triplesTab, "Triplos")
+
+        # ====== Pestaña: Cuádruplos ======
+        self.quadruplesTab = QtWidgets.QWidget()
+        self.quadruplesLayout = QtWidgets.QVBoxLayout(self.quadruplesTab)
+
+        self.tb_cuadruplos = QtWidgets.QTableWidget()
+        self.tb_cuadruplos.setColumnCount(5)
+        self.tb_cuadruplos.setHorizontalHeaderLabels(["#", "Operador", "Arg1", "Arg2", "Resultado"])
+        self.tb_cuadruplos.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
+        self.tb_cuadruplos.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
+        self.tb_cuadruplos.horizontalHeader().setSectionResizeMode(2, QtWidgets.QHeaderView.Stretch)
+        self.tb_cuadruplos.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.Stretch)
+        self.tb_cuadruplos.horizontalHeader().setSectionResizeMode(4, QtWidgets.QHeaderView.Stretch)
+        self.tb_cuadruplos.verticalHeader().setVisible(False)
+        self.tb_cuadruplos.setAlternatingRowColors(True)
+        self.tb_cuadruplos.setEditTriggers(QtWidgets.QTableWidget.NoEditTriggers)
+        self.tb_cuadruplos.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.quadruplesLayout.addWidget(self.tb_cuadruplos)
+
+        self.analysisTabs.addTab(self.quadruplesTab, "Cuádruplos")
+
+        # ====== Pestaña: Salida del código ======
+        self.outputTab = QtWidgets.QWidget()
+        self.outputLayout = QtWidgets.QVBoxLayout(self.outputTab)
+
+        # Cabecera de estado/acción
+        self.outputHeader = QtWidgets.QHBoxLayout()
+        self.lb_output_status = QtWidgets.QLabel("Salida del código (solo diseño):")
+        self.lb_output_status.setStyleSheet("QLabel { color: #F0AD4E; }")
+        self.bt_output_clear = QtWidgets.QPushButton("Limpiar salida")
+        self.bt_output_clear.setIcon(QtGui.QIcon.fromTheme("edit-clear"))
+        self.bt_output_clear.setStyleSheet("""
+            QPushButton {
+                background-color: #5F5F5F;
+                border-color: #6A6A6A;
+            }
+            QPushButton:hover {
+                background-color: #6A6A6A;
+            }
+        """)
+        self.outputHeader.addWidget(self.lb_output_status)
+        self.outputHeader.addStretch()
+        self.outputHeader.addWidget(self.bt_output_clear)
+        self.outputLayout.addLayout(self.outputHeader)
+
+        # Consola de salida
+        self.tx_output = QtWidgets.QPlainTextEdit()
+        self.tx_output.setReadOnly(True)
+        self.tx_output.setPlaceholderText("Aquí aparecerá la salida del programa...")
+        self.tx_output.setObjectName("tx_output_console")
+        self.outputLayout.addWidget(self.tx_output)
+
+        self.analysisTabs.addTab(self.outputTab, "Salida del código")
+
+        # Agregar el TabWidget al layout principal
         self.mainLayout.addWidget(self.analysisTabs)
 
         # Controles inferiores
@@ -318,7 +413,7 @@ class Ui_home(object):
             }
         """)
 
-        self.bt_arbol = QtWidgets.QPushButton("Generar Recorridos")  # Actualizado
+        self.bt_arbol = QtWidgets.QPushButton("Generar Recorridos")
         self.bt_arbol.setIcon(QtGui.QIcon.fromTheme("view-list-tree"))
         self.bt_arbol.setStyleSheet("""
             QPushButton {
@@ -361,12 +456,18 @@ class Ui_home(object):
         self.shortcut_open = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+O"), home)
         self.shortcut_clear = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+L"), home)
         self.shortcut_tree = QtWidgets.QShortcut(QtGui.QKeySequence("F7"), home)
+        self.shortcut_output = QtWidgets.QShortcut(QtGui.QKeySequence("F9"), home)  # Ir a salida (atajo opcional)
 
         home.setCentralWidget(self.centralWidget)
 
         # Establecer texto inicial y tooltips
         self.retranslateUi(home)
         QtCore.QMetaObject.connectSlotsByName(home)
+
+        # ===== Conexiones de UI básicas (navegación de diseño) =====
+        self.bt_run.clicked.connect(lambda: self.analysisTabs.setCurrentWidget(self.outputTab))
+        self.shortcut_output.activated.connect(lambda: self.analysisTabs.setCurrentWidget(self.outputTab))
+        self.bt_output_clear.clicked.connect(self.tx_output.clear)
 
     # Actualizaciones para el método retranslateUi en la clase Ui_home
     def retranslateUi(self, home):
@@ -376,16 +477,37 @@ class Ui_home(object):
         self.analysisTabs.setTabText(1, _translate("home", "Análisis Sintáctico"))
         self.analysisTabs.setTabText(2, _translate("home", "Tabla de Símbolos"))
         self.analysisTabs.setTabText(3, _translate("home", "Recorridos del Árbol"))
+        self.analysisTabs.setTabText(4, _translate("home", "Triplos"))
+        self.analysisTabs.setTabText(5, _translate("home", "Cuádruplos"))
+        self.analysisTabs.setTabText(6, _translate("home", "Salida del código"))
+
         self.bt_lexico.setText(_translate("home", "Analizar Léxico"))
         self.bt_lexico.setToolTip(_translate("home", "Realizar análisis léxico (F5)"))
+
         self.bt_sintactico.setText(_translate("home", "Analizar Sintaxis"))
         self.bt_sintactico.setToolTip(_translate("home", "Realizar análisis sintáctico (F6)"))
+
         self.bt_simbolos.setText(_translate("home", "Ver Tabla Símbolos"))
         self.bt_simbolos.setToolTip(_translate("home", "Mostrar tabla de símbolos"))
-        self.bt_arbol.setText(_translate("home", "Visualizar Recorridos"))  # Actualizado
-        self.bt_arbol.setToolTip(_translate("home", "Visualización gráfica de recorridos: pre-orden, in-orden y post-orden (F7)"))  # Actualizado
+
+        self.bt_arbol.setText(_translate("home", "Visualizar Recorridos"))
+        self.bt_arbol.setToolTip(_translate("home", "Visualización gráfica de recorridos: pre-orden, in-orden y post-orden (F7)"))
+
+        self.bt_arbolLR.setText(_translate("home", "Generar Árbol LR"))
+
         self.bt_archivo.setText(_translate("home", "Cargar Archivo"))
         self.bt_archivo.setToolTip(_translate("home", "Abrir un archivo Java (Ctrl+O)"))
+
+        self.bt_run.setText(_translate("home", "Run"))
+        self.bt_run.setToolTip(_translate("home", "Ejecutar el código y mostrar la salida"))
+
         self.bt_limpiar.setText(_translate("home", "Limpiar"))
         self.bt_limpiar.setToolTip(_translate("home", "Limpiar todos los campos (Ctrl+L)"))
+
+        # Tooltips de zoom (atalhos de teclado)
+        self.bt_zoom_in.setToolTip(_translate("home", "Zoom + (Shift + “+”)"))
+        self.bt_zoom_out.setToolTip(_translate("home", "Zoom - (Shift + “-”)"))
+
         self.sourceGroup.setTitle(_translate("home", "Código Fuente Java"))
+        self.lb_output_status.setText(_translate("home", "Salida del código (solo diseño):"))
+        self.bt_output_clear.setText(_translate("home", "Limpiar salida"))

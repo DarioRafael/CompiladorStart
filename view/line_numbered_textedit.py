@@ -13,6 +13,10 @@ class LineNumberArea(QtWidgets.QWidget):
     def paintEvent(self, event):
         self._editor.lineNumberAreaPaintEvent(event)
 
+    def wheelEvent(self, event: QtGui.QWheelEvent):
+        # Reenvía el evento al editor para que funcione el zoom sobre el gutter
+        self._editor.wheelEvent(event)
+
 
 class CodeEditor(QtWidgets.QPlainTextEdit):
     def __init__(self, parent=None):
@@ -20,7 +24,7 @@ class CodeEditor(QtWidgets.QPlainTextEdit):
 
         # ==== Básico ====
         self.setLineWrapMode(QtWidgets.QPlainTextEdit.NoWrap)
-        self.setTabStopDistance(4 * self.fontMetrics().width(" "))
+        self.setTabStopDistance(4 * self.fontMetrics().horizontalAdvance(" "))
 
         font = QtGui.QFont("Consolas", 11)
         self.setFont(font)
@@ -53,19 +57,36 @@ class CodeEditor(QtWidgets.QPlainTextEdit):
         # Eventos de cambio de texto
         self.textChanged.connect(self._update_trailing_ws_highlight)
 
-        # ==== Scrollbars ====
+        # Scrollbars
         self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
         self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
 
         # Composición inicial
         self._recompose_extras()
 
+    # ========= Zoom público (para botones) =========
+    def zoom_in(self, checked: bool = False):
+        self._apply_zoom_steps(+1)
+
+    def zoom_out(self, checked: bool = False):
+        self._apply_zoom_steps(-1)
+
+    def zoom_reset(self, size_pt: int = 11, checked: bool = False):
+        font = self.font()
+        font.setPointSize(size_pt)
+        self.setFont(font)
+        self.setTabStopDistance(4 * self.fontMetrics().horizontalAdvance(" "))
+        self._updateLineNumberAreaWidth(0)
+        self._recompose_extras()
+        self.viewport().update()
+        self._lineNumberArea.update()
+
     # =========================================================
     # Área de números de línea
     # =========================================================
     def lineNumberAreaWidth(self):
         digits = len(str(max(1, self.blockCount())))
-        return 10 + self.fontMetrics().width("9") * digits
+        return 10 + self.fontMetrics().horizontalAdvance("9") * digits
 
     def _updateLineNumberAreaWidth(self, _):
         self.setViewportMargins(self.lineNumberAreaWidth(), 0, 0, 0)
@@ -81,12 +102,12 @@ class CodeEditor(QtWidgets.QPlainTextEdit):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         cr = self.contentsRect()
-        self._lineNumberArea.setGeometry(QtCore.QRect(cr.left(), cr.top(), self.lineNumberAreaWidth(), cr.height()))
+        self._lineNumberArea.setGeometry(QtCore.QRect(cr.left(), cr.top(),
+                                                      self.lineNumberAreaWidth(), cr.height()))
 
     def lineNumberAreaPaintEvent(self, event):
         painter = QtGui.QPainter(self._lineNumberArea)
         painter.fillRect(event.rect(), QtGui.QColor("#252526"))
-
         painter.setFont(self.font())
 
         block = self.firstVisibleBlock()
@@ -125,10 +146,10 @@ class CodeEditor(QtWidgets.QPlainTextEdit):
         self._recompose_extras()
 
     def _init_indent_guides(self):
-        pass  # Aquí podrías implementar guías de indentación
+        pass
 
     def _init_ruler(self):
-        pass  # Aquí puedes dibujar columna 80, por ejemplo
+        pass
 
     def _init_trailing_ws(self):
         self._trailing_extras = []
@@ -176,7 +197,6 @@ class CodeEditor(QtWidgets.QPlainTextEdit):
     # =========================================================
     # Eventos
     # =========================================================
-
     def setExtraSelections(self, selections):
         """Captura selecciones externas (diagnósticos) y recompone con las internas."""
         self._externalExtraSelections = list(selections or [])
@@ -189,44 +209,53 @@ class CodeEditor(QtWidgets.QPlainTextEdit):
     # Zoom con Shift + rueda
     # ============================
     def wheelEvent(self, event: QtGui.QWheelEvent):
-        # Si mantiene Shift, usamos la rueda para zoom
-        if event.modifiers() & QtCore.Qt.ShiftModifier:
-            # angleDelta.y(): +120 por “notch” hacia arriba, -120 hacia abajo (en la mayoría de ratones)
-            delta = event.angleDelta().y()
-            if delta != 0:
-                steps = int(delta / 120) if delta % 120 == 0 else (1 if delta > 0 else -1)
+        mods = event.modifiers()
+        wants_zoom = bool(mods & QtCore.Qt.ShiftModifier)
+        if wants_zoom:
+            angle = event.angleDelta().y()
+            pixel = event.pixelDelta().y()
+            if angle != 0:
+                steps = int(angle / 120) if angle % 120 == 0 else (1 if angle > 0 else -1)
+            elif pixel != 0:
+                steps = 1 if pixel > 0 else -1
+            else:
+                steps = 0
+            if steps:
                 self._apply_zoom_steps(steps)
-            # Consumimos el evento para que no haga scroll horizontal por defecto
-            event.accept()
-            return
-
-        # Comportamiento normal si no está presionando Shift
+                event.accept()
+                return
         super().wheelEvent(event)
 
-    def _apply_zoom_steps(self, steps: int):
-        """Aumenta/disminuye el tamaño de fuente y ajusta detalles relacionados."""
-        font = self.font()
-        self._lineNumberArea.setFont(font)
-        # Usa pointSize si existe, si no, toma pixelSize y convértelo a pointSize aproximado
-        size = font.pointSize()
-        if size <= 0:
-            # fallback si el font usa pixelSize
-            size = max(8, int(font.pixelSize() / self.logicalDpiY() * 72))
+    # ============================
+    # Zoom con Shift + (+/-)
+    # ============================
+    def keyPressEvent(self, event: QtGui.QKeyEvent):
+        mods = event.modifiers()
+        key = event.key()
+        if mods & QtCore.Qt.ShiftModifier:
+            # "+" puede llegar como Key_Plus o Key_Equal (Shift + "=" en muchos teclados)
+            if key in (QtCore.Qt.Key_Plus, QtCore.Qt.Key_Equal):
+                self._apply_zoom_steps(+1)
+                return
+            # "-" puede llegar como Key_Minus o Key_Underscore (Shift + "-" en algunos layouts)
+            if key in (QtCore.Qt.Key_Minus, QtCore.Qt.Key_Underscore):
+                self._apply_zoom_steps(-1)
+                return
+        super().keyPressEvent(event)
 
-        new_size = max(8, min(48, size + steps))  # límites razonables 8–48 pt
+    # Lógica central del zoom
+    def _apply_zoom_steps(self, steps: int):
+        font = self.font()
+        size = font.pointSize() if font.pointSize() > 0 else max(
+            8, int(font.pixelSize() / self.logicalDpiY() * 72)
+        )
+        new_size = max(8, min(48, size + steps))  # límites 8–48 pt
         if new_size == size:
             return
-
         font.setPointSize(new_size)
         self.setFont(font)
-
-        # Ajustar tabulación al nuevo ancho del espacio
-        space_w = self.fontMetrics().width(" ")
-        self.setTabStopDistance(4 * space_w)
-
-        # Recalcular margen del área de línea y refrescar highlights
+        self.setTabStopDistance(4 * self.fontMetrics().horizontalAdvance(" "))
         self._updateLineNumberAreaWidth(0)
         self._recompose_extras()
         self.viewport().update()
         self._lineNumberArea.update()
-

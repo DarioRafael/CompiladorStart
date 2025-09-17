@@ -15,6 +15,9 @@ from diagnostics.java_diagnostics import diagnose as diag_struct
 from semantics.java_semantics import analyze_semantics as diag_sem
 from editors.completer import JavaAutoCompleter, JAVA_KEYWORDS
 
+# >>> Runner Java (nuevo)
+from runners.java_runner import JavaRunner
+
 
 class Main(QMainWindow):
     """Clase principal de la aplicación"""
@@ -44,6 +47,8 @@ class Main(QMainWindow):
         self.home.bt_simbolos.clicked.connect(self.mostrar_tabla_simbolos)
         self.home.bt_arbol.clicked.connect(self.generar_recorridos)
         self.home.bt_arbolLR.clicked.connect(self.generar_arbol_lr)  # respeta tu nombre de botón
+        self.home.bt_zoom_in.clicked.connect(self.home.tx_ingreso.zoom_in)
+        self.home.bt_zoom_out.clicked.connect(self.home.tx_ingreso.zoom_out)
 
         # Atajos (si existen en tu Ui_home)
         try:
@@ -56,9 +61,85 @@ class Main(QMainWindow):
             # Si alguno no existe, simplemente lo ignoramos
             pass
 
+        # --- Runner Java (integración completa) ---
+        self.runner = JavaRunner(parent=self)
+        self.runner.started.connect(self._on_runner_started)   # "compile" | "run"
+        self.runner.output.connect(self._append_output)        # stdout/stderr
+        self.runner.finished.connect(self._on_runner_finished) # exit code
+        self.runner.error.connect(self._on_runner_error)       # errores de preparación
+
+        # Click en Run => compilar/ejecutar
+        self.home.bt_run.clicked.connect(self._on_run_clicked)
+
         # Estado inicial
         self.home.estado.showMessage("Analizador de código Java - Desarrollado con PyQt5 y PLY")
         self.analisis_sintactico_realizado = False
+
+    # =======================
+    #   RUN / OUTPUT HANDLERS
+    # =======================
+    def _on_run_clicked(self):
+        code = self.home.tx_ingreso.toPlainText().strip()
+        if not code:
+            QMessageBox.warning(self, "Advertencia", "No hay código para ejecutar.")
+            return
+
+        # Ir a la pestaña de salida y limpiar consola
+        try:
+            self.home.analysisTabs.setCurrentWidget(self.home.outputTab)
+            self.home.tx_output.clear()
+            self.home.lb_output_status.setText("Compilando y ejecutando...")
+        except Exception:
+            pass  # por si aún no existe la pestaña (aunque en tu Ui sí existe)
+
+        # Deshabilitar Run mientras compila/ejecuta
+        self.home.bt_run.setEnabled(False)
+        self.home.estado.showMessage("Preparando ejecución...")
+
+        # Ejecutar (estructura simple: un archivo, sin package, con public class y main)
+        self.runner.run_code(code)
+
+    def _on_runner_started(self, stage: str):
+        # stage: "compile" o "run"
+        try:
+            self.home.analysisTabs.setCurrentWidget(self.home.outputTab)
+            self.home.lb_output_status.setText("Compilando..." if stage == "compile" else "Ejecutando...")
+        except Exception:
+            pass
+        self.home.estado.showMessage("Compilando..." if stage == "compile" else "Ejecutando...")
+
+    def _append_output(self, text: str):
+        try:
+            self.home.tx_output.moveCursor(QTextCursor.End)
+            self.home.tx_output.insertPlainText(text)
+            self.home.tx_output.moveCursor(QTextCursor.End)
+        except Exception:
+            pass
+
+    def _on_runner_finished(self, code: int):
+        self.home.bt_run.setEnabled(True)
+        if code == 0:
+            self.home.estado.showMessage("Ejecución finalizada correctamente.", 5000)
+            try:
+                self.home.lb_output_status.setText("Finalizado.")
+            except Exception:
+                pass
+        else:
+            self.home.estado.showMessage(f"Finalizado con errores (código {code}).", 5000)
+            try:
+                self.home.lb_output_status.setText(f"Finalizado con errores (código {code}).")
+            except Exception:
+                pass
+
+    def _on_runner_error(self, message: str):
+        self.home.bt_run.setEnabled(True)
+        try:
+            self.home.analysisTabs.setCurrentWidget(self.home.outputTab)
+            self.home.lb_output_status.setText("Error")
+            self.home.tx_output.appendPlainText(f"[ERROR] {message}\n")
+        except Exception:
+            pass
+        self.home.estado.showMessage("Error al preparar/ejecutar.", 5000)
 
     # -----------------------------
     # Utilidad: expresión por tipo
