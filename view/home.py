@@ -9,10 +9,8 @@ class ZoomablePlainTextEdit(QtWidgets.QPlainTextEdit):
         super().__init__(*args, **kwargs)
         self._min_pt = min_pt
         self._max_pt = max_pt
-        # tamaño inicial (si no quieres tocarlo, comenta estas 2 líneas)
         f = self.font()
-        if f.pointSize() <= 0:
-            f.setPointSize(start_pt)
+        f.setPointSize(start_pt)
         self.setFont(f)
 
     def _apply_zoom_steps(self, steps: int):
@@ -411,7 +409,7 @@ class Ui_home(object):
         self.outputLayout.addLayout(self.outputHeader)
 
         # Consola de salida
-        self.tx_output = ZoomablePlainTextEdit()
+        self.tx_output = ZoomablePlainTextEdit(start_pt= 20)
         self.tx_output.setReadOnly(True)
         self.tx_output.setPlaceholderText("Aquí aparecerá la salida del programa...")
         self.tx_output.setObjectName("tx_output_console")

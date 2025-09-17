@@ -26,7 +26,7 @@ class CodeEditor(QtWidgets.QPlainTextEdit):
         self.setLineWrapMode(QtWidgets.QPlainTextEdit.NoWrap)
         self.setTabStopDistance(4 * self.fontMetrics().horizontalAdvance(" "))
 
-        font = QtGui.QFont("Consolas", 11)
+        font = QtGui.QFont("Consolas", 20)
         self.setFont(font)
 
         pal = self.palette()
