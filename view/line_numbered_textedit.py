@@ -230,17 +230,6 @@ class CodeEditor(QtWidgets.QPlainTextEdit):
     # Zoom con Shift + (+/-)
     # ============================
     def keyPressEvent(self, event: QtGui.QKeyEvent):
-        mods = event.modifiers()
-        key = event.key()
-        if mods & QtCore.Qt.ShiftModifier:
-            # "+" puede llegar como Key_Plus o Key_Equal (Shift + "=" en muchos teclados)
-            if key in (QtCore.Qt.Key_Plus, QtCore.Qt.Key_Equal):
-                self._apply_zoom_steps(+1)
-                return
-            # "-" puede llegar como Key_Minus o Key_Underscore (Shift + "-" en algunos layouts)
-            if key in (QtCore.Qt.Key_Minus, QtCore.Qt.Key_Underscore):
-                self._apply_zoom_steps(-1)
-                return
         super().keyPressEvent(event)
 
     # Lógica central del zoom

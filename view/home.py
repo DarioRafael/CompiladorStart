@@ -41,13 +41,6 @@ class ZoomablePlainTextEdit(QtWidgets.QPlainTextEdit):
         super().wheelEvent(event)
 
     def keyPressEvent(self, event: QtGui.QKeyEvent):
-        if event.modifiers() & QtCore.Qt.ShiftModifier:
-            if event.key() in (QtCore.Qt.Key_Plus, QtCore.Qt.Key_Equal):
-                self._apply_zoom_steps(+1)
-                return
-            if event.key() in (QtCore.Qt.Key_Minus, QtCore.Qt.Key_Underscore):
-                self._apply_zoom_steps(-1)
-                return
         super().keyPressEvent(event)
 
 
@@ -219,6 +212,28 @@ class Ui_home(object):
         self.sourceLayout = QtWidgets.QVBoxLayout(self.sourceGroup)
         self.tx_ingreso = CodeEditor()
         self.tx_ingreso.setPlaceholderText("Escribe tu código Java aquí o carga un archivo...")
+
+        default_code = (
+            "public class Main {\n"
+            "    public static void main(String[] args) {\n"
+            "        $0\n"
+            "    }\n"
+            "}"
+        )
+        self.tx_ingreso.setPlainText(default_code)
+        # Colocar el cursor donde estaba $0 y quitar el marcador
+        texto = self.tx_ingreso.toPlainText()
+        pos = texto.find("$0")
+        if pos != -1:
+            # Quitar el marcador
+            texto = texto.replace("$0", "")
+            self.tx_ingreso.setPlainText(texto)
+            # Mover cursor a esa posición
+            cur = self.tx_ingreso.textCursor()
+            cur.setPosition(pos)
+            self.tx_ingreso.setTextCursor(cur)
+
+
         self.sourceLayout.addWidget(self.tx_ingreso)
         self.mainLayout.addWidget(self.sourceGroup)
 

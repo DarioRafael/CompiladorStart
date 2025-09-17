@@ -33,7 +33,7 @@ variables_declaradas = {}  # Diccionario para seguimiento de variables
 def p_programa(p):
     'programa : codigo'
     if len(resultado_gramatica) == 0:
-        resultado_gramatica.append("Programa Java analizado correctamente")
+        resultado_gramatica.append("<span style='font-size:20px; color:lime;'>✅ Análisis sintáctico finalizado sin errores</span>")
 
 
 def p_codigo(p):
@@ -187,7 +187,9 @@ def p_declaracion_variable(p):
     # Verificar que el tipo sea un tipo válido
     tipos_validos = ['int', 'boolean', 'char', 'byte', 'short', 'long', 'float', 'double', 'String']
     if p[1] not in tipos_validos:
-        resultado_gramatica.append(f"Error de sintaxis en línea {p.lineno(1)}: Tipo de variable no válido '{p[1]}'")
+        resultado_gramatica.append(
+            f"<span style='color:red; font-size:18px; font-weight:bold;'>Error de sintaxis en línea {p.lineno(1)}: Tipo de variable no válido '{p[1]}'</span>"
+        )
 
     # Registrar la variable en la tabla de símbolos
     nombre = p[2]
