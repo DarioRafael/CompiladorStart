@@ -19,6 +19,114 @@ from editors.completer import JavaAutoCompleter, JAVA_KEYWORDS
 from runners.java_runner import JavaRunner
 
 
+# ===============================
+#   Asignador de Direcciones
+# ===============================
+class AddressAllocator:
+    """
+    Asigna direcciones simulando un runtime 64-bit:
+      - GLOBAL: offsets crecientes (DATA segment)
+      - STACK (por alcance/función): locales en offsets negativos desde FP
+      - Parámetros (si 'categoria' == 'param'): offsets positivos desde FP
+    Alineación configurable (por defecto 8).
+    """
+    def __init__(self, word_size=8, align=8):
+        self.word_size = word_size
+        self.align = align
+        self.global_off = 0
+        # Por cada alcance (función/bloque) tenemos un frame con contadores
+        self.frames = {}  # scope -> {'locals_off': 0 (neg), 'params_off': base_pos}
+
+        # punto de partida típico para params (depende de ABI; educativo):
+        # suponemos FP+16 primer parámetro
+        self.param_base = 16
+
+    # tamaños por tipo (puedes ajustar a tu gusto/arquitectura)
+    _type_sizes = {
+        "INT": 4, "FLOAT": 4, "DOUBLE": 8, "BOOLEAN": 1, "CHAR": 1,
+        "LONG": 8, "SHORT": 2, "BYTE": 1, "VOID": 0,
+        # En Java, String/objetos son referencias (punteros) -> 8 bytes en 64-bit
+        "STRING": 8, "REFERENCE": 8,
+    }
+
+    def size_of(self, tipo: str, override_bytes: int = None) -> int:
+        if override_bytes is not None:
+            return override_bytes
+        t = (tipo or "").upper()
+        return self._type_sizes.get(t, self.word_size)  # por defecto, referencia
+
+    def _align_up(self, n: int, a: int) -> int:
+        return ( (n + (a - 1)) // a ) * a
+
+    def _align_down(self, n: int, a: int) -> int:
+        return -self._align_up(abs(n), a)
+
+    def _frame(self, scope: str):
+        fr = self.frames.get(scope)
+        if not fr:
+            fr = {"locals_off": 0, "params_off": self.param_base}
+            self.frames[scope] = fr
+        return fr
+
+    def _is_global(self, info: dict) -> bool:
+        alc = (info.get("alcance") or "global").lower()
+        return alc in ("global", "namespace", "module")
+
+    def _is_param(self, info: dict) -> bool:
+        return (info.get("categoria") or "").lower() == "param"
+
+    def allocate(self, symbol_table: dict) -> dict:
+        """
+        symbol_table: dict nombre -> info (de tu tabla actual)
+        Devuelve dict nombre -> {'segment': 'GLOBAL'|'STACK', 'offset': int, 'addr_str': str}
+        """
+        out = {}
+        # Orden estable: primero globales (para que se vean ordenados bonitos)
+        names = list(symbol_table.keys())
+        names.sort()
+
+        for name in names:
+            info = symbol_table[name] or {}
+            tipo = info.get("tipo", "")
+            alcance = info.get("alcance", "global")
+            override_sz = None
+            if "tamaño" in info:
+                try:
+                    # tamaño en elementos (ej: arrays)
+                    override_sz = int(info["tamaño"]) * self.size_of(tipo)
+                except Exception:
+                    pass
+
+            sz = self.size_of(tipo, override_bytes=override_sz)
+            sz = max(1, sz)  # nunca 0 por seguridad
+            sz_al = self._align_up(sz, self.align)
+
+            if self._is_global(info):
+                # GLOBAL: offsets crecientes
+                base = self._align_up(self.global_off, self.align)
+                addr = f"GLOBAL+{base}"
+                out[name] = {"segment": "GLOBAL", "offset": base, "addr_str": addr}
+                self.global_off = base + sz_al
+            else:
+                # STACK por alcance
+                fr = self._frame(alcance)
+                if self._is_param(info):
+                    # parámetros: positivos desde FP (educativo)
+                    pos = self._align_up(fr["params_off"], self.align)
+                    addr = f"[FP+{pos}]"
+                    out[name] = {"segment": "STACK", "offset": pos, "addr_str": addr}
+                    fr["params_off"] = pos + sz_al
+                else:
+                    # locales: negativos desde FP
+                    # vamos “creciendo” hacia abajo
+                    neg = fr["locals_off"] - sz_al
+                    neg_al = self._align_down(neg, self.align)
+                    addr = f"[FP{neg_al}]" if neg_al < 0 else f"[FP+{neg_al}]"
+                    out[name] = {"segment": "STACK", "offset": neg_al, "addr_str": addr}
+                    fr["locals_off"] = neg_al
+        return out
+
+
 class Main(QMainWindow):
     """Clase principal de la aplicación"""
 
@@ -444,35 +552,49 @@ class Main(QMainWindow):
         self.home.tb_simbolos.setRowCount(0)
         self.home.tb_simbolos.setAlternatingRowColors(False)
 
-        simbolos = tabla_simbolos.obtener_todos()
+        simbolos = tabla_simbolos.obtener_todos()  # dict nombre -> info
         if not simbolos:
             self.home.estado.showMessage("No hay símbolos definidos en la tabla de símbolos")
             return
 
+        # 1) Asignar direcciones
+        allocator = AddressAllocator(word_size=8, align=8)  # “realista” 64-bit
+        addr_map = allocator.allocate(simbolos)  # nombre -> {addr_str, ...}
+
+        # 2) Pintar tabla
         self.home.tb_simbolos.setRowCount(len(simbolos))
 
-        for i, (nombre, info) in enumerate(simbolos.items()):
-            # Fondo blanco + texto negro (corrige el contraste)
-            bg = QColor("#FFFFFF")
-            fg = QColor("#FFFFFF")
+        # Estilo legible (fondo oscuro, texto claro)
+        bg = QColor("#1E1E1E")
+        fg = QColor("#DCDCDC")
 
-            item_nombre = QTableWidgetItem(nombre)
-            item_tipo = QTableWidgetItem(info.get("tipo", ""))
-            item_valor = QTableWidgetItem(str(info.get("valor", "")))
-            item_linea = QTableWidgetItem(str(info.get("linea", "")))
-            item_alcance = QTableWidgetItem(info.get("alcance", "global"))
+        # Orden consistente
+        names = list(simbolos.keys())
+        names.sort()
 
-            items = [item_nombre, item_tipo, item_valor, item_linea, item_alcance]
-            for it in items:
+        for i, nombre in enumerate(names):
+            info = simbolos[nombre]
+            tipo = info.get("tipo", "")
+            valor = str(info.get("valor", ""))
+            linea = str(info.get("linea", ""))
+            alcance = info.get("alcance", "global")
+            addr_str = addr_map.get(nombre, {}).get("addr_str", "")
+
+            items = [
+                QTableWidgetItem(nombre),
+                QTableWidgetItem(tipo),
+                QTableWidgetItem(valor),
+                QTableWidgetItem(linea),
+                QTableWidgetItem(alcance),
+                QTableWidgetItem(addr_str),
+            ]
+            for col, it in enumerate(items):
                 it.setBackground(bg)
                 it.setForeground(fg)
-                f = it.font(); f.setBold(True); it.setFont(f)
-
-            self.home.tb_simbolos.setItem(i, 0, item_nombre)
-            self.home.tb_simbolos.setItem(i, 1, item_tipo)
-            self.home.tb_simbolos.setItem(i, 2, item_valor)
-            self.home.tb_simbolos.setItem(i, 3, item_linea)
-            self.home.tb_simbolos.setItem(i, 4, item_alcance)
+                f = it.font();
+                f.setBold(True);
+                it.setFont(f)
+                self.home.tb_simbolos.setItem(i, col, it)
 
         self.home.tb_simbolos.resizeColumnsToContents()
         self.home.estado.showMessage(f"Tabla de símbolos: {len(simbolos)} símbolos encontrados")
@@ -586,6 +708,7 @@ class Main(QMainWindow):
 
     def ev_limpiar(self):
         self.home.tx_ingreso.clear()
+        self.home.lb_output_status.clear()
         self.home.tb_lexico.setRowCount(0)
         self.home.tx_sintactico.clear()
         self.home.tb_simbolos.setRowCount(0)

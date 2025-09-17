@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 import os
 import re
+import sys
 import shutil
 import tempfile
-
+from pathlib import Path
 from PyQt5 import QtCore
 
 
@@ -20,13 +21,16 @@ class JavaRunner(QtCore.QObject):
         self._proc = None
         self._class_name = None
 
+        # Rutas al JDK embebido (si existe)
+        self._java_paths = self._locate_embedded_java()
+
+    # ===============================
+    # API principal
+    # ===============================
     def stop(self):
         if self._proc and self._proc.state() != QtCore.QProcess.NotRunning:
             self._proc.kill()
 
-    # -------------------------------
-    # API principal
-    # -------------------------------
     def run_code(self, source_code: str):
         self._cleanup()
 
@@ -53,46 +57,133 @@ class JavaRunner(QtCore.QObject):
         # Compilar
         self._compile(java_path)
 
-    # -------------------------------
+    # ===============================
     # Utilidades
-    # -------------------------------
+    # ===============================
     _re_public_class = re.compile(r'^\s*public\s+class\s+([A-Za-z_]\w*)', re.MULTILINE)
 
     def _extract_public_class(self, src: str):
         m = self._re_public_class.search(src)
         return m.group(1) if m else None
 
-    # -------------------------------
+    def _find_base_with_runtimes(self) -> Path:
+        """
+        Devuelve el primer directorio ascendente (o _MEIPASS/CWD) que contenga 'runtimes'.
+        """
+        # 1) PyInstaller
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            p = Path(meipass)
+            if (p / "runtimes").exists():
+                return p
+
+        # 2) Ascender desde este archivo
+        here = Path(__file__).resolve()
+        for p in [here.parent, *here.parents]:
+            if (p / "runtimes").exists():
+                return p
+
+        # 3) CWD como último intento
+        cwd = Path.cwd()
+        if (cwd / "runtimes").exists():
+            return cwd
+
+        # Fallback: carpeta del archivo
+        return here.parent
+
+    def _locate_embedded_java(self):
+        """
+        Busca un JDK embebido en runtimes/<os>/jdk y devuelve rutas.
+        Estructuras esperadas:
+          - Windows/Linux: runtimes/<os>/jdk/bin/{java,javac}
+          - macOS:         runtimes/mac/jdk/Contents/Home/bin/{java,javac}
+        """
+        base_dir = self._find_base_with_runtimes()
+
+        platform = "win" if os.name == "nt" else ("mac" if sys.platform == "darwin" else "linux")
+        if platform == "mac":
+            jdk_home = base_dir / "runtimes" / platform / "jdk" / "Contents" / "Home"
+        else:
+            jdk_home = base_dir / "runtimes" / platform / "jdk"
+
+        bin_dir = jdk_home / "bin"
+        java_exe = "java.exe" if os.name == "nt" else "java"
+        javac_exe = "javac.exe" if os.name == "nt" else "javac"
+
+        java_path = bin_dir / java_exe
+        javac_path = bin_dir / javac_exe
+
+        # Debug opcional para ver por dónde busca (te ayuda ahora)
+        try:
+            self.output.emit(f"[DEBUG] runtimes base: {base_dir}")
+            self.output.emit(f"[DEBUG] JAVA_HOME: {jdk_home}")
+            self.output.emit(f"[DEBUG] java: {java_path} | javac: {javac_path}")
+        except Exception:
+            pass
+
+        return {
+            "JAVA_HOME": str(jdk_home) if jdk_home.exists() else None,
+            "java": str(java_path) if java_path.exists() else None,
+            "javac": str(javac_path) if javac_path.exists() else None,
+        }
+
+    def _make_env_with_embedded_java(self):
+        """
+        Crea un entorno para QProcess que antepone el JDK embebido al PATH
+        y define JAVA_HOME (si existe).
+        """
+        env = QtCore.QProcessEnvironment.systemEnvironment()
+        java_home = self._java_paths.get("JAVA_HOME")
+        if java_home:
+            env.insert("JAVA_HOME", java_home)
+            bin_dir = str(Path(java_home) / "bin")
+            sep = ";" if os.name == "nt" else ":"
+            current_path = env.value("PATH", "")
+            env.insert("PATH", bin_dir + (sep + current_path if current_path else ""))
+        return env
+
+    # ===============================
     # Compilación / Ejecución
-    # -------------------------------
+    # ===============================
     def _compile(self, java_path: str):
-        if not shutil.which("javac"):
-            self.error.emit("No se encontró 'javac' en PATH. Instala JDK y configura PATH.")
+        """Compila usando solo el JDK embebido; si no existe, error."""
+        emb_javac = self._java_paths.get("javac")
+
+        if not (emb_javac and Path(emb_javac).exists()):
+            self.error.emit("No se encontró 'javac' en runtimes/<os>/jdk. No se usará el del sistema.")
             self.finished.emit(1)
             return
 
         self.started.emit("compile")
 
         self._proc = QtCore.QProcess(self)
-        self._proc.setProgram("javac")
+        self._proc.setProgram(emb_javac)
         self._proc.setArguments(["-d", self._tmpdir, java_path])
+        self._proc.setProcessEnvironment(self._make_env_with_embedded_java())
         self._wire_process(step="compile")
         self._proc.start()
 
     def _run(self):
-        if not shutil.which("java"):
-            self.error.emit("No se encontró 'java' en PATH. Instala JRE/JDK y configura PATH.")
+        """Ejecuta usando solo el JDK embebido; si no existe, error."""
+        emb_java = self._java_paths.get("java")
+
+        if not (emb_java and Path(emb_java).exists()):
+            self.error.emit("No se encontró 'java' en runtimes/<os>/jdk. No se usará el del sistema.")
             self.finished.emit(1)
             return
 
         self.started.emit("run")
 
         self._proc = QtCore.QProcess(self)
-        self._proc.setProgram("java")
+        self._proc.setProgram(emb_java)
         self._proc.setArguments(["-cp", self._tmpdir, self._class_name])
+        self._proc.setProcessEnvironment(self._make_env_with_embedded_java())
         self._wire_process(step="run")
         self._proc.start()
 
+    # ===============================
+    # Señales QProcess
+    # ===============================
     def _wire_process(self, step: str):
         self._proc.readyReadStandardOutput.connect(
             lambda: self._emit_text(self._proc.readAllStandardOutput()))
@@ -117,6 +208,9 @@ class JavaRunner(QtCore.QObject):
         else:
             self.finished.emit(code)
 
+    # ===============================
+    # Limpieza
+    # ===============================
     def _cleanup(self):
         # Detener proceso previo
         if self._proc and self._proc.state() != QtCore.QProcess.NotRunning:
