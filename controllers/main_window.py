@@ -148,11 +148,9 @@ class Main(QMainWindow):
         self._init_autocomplete()
 
         # Conectar eventos
-        self.home.bt_lexico.clicked.connect(self.ev_lexico)
         self.home.bt_sintactico.clicked.connect(self.ev_sintactico)
         self.home.bt_archivo.clicked.connect(self.ev_archivo)
         self.home.bt_limpiar.clicked.connect(self.ev_limpiar)
-        self.home.bt_simbolos.clicked.connect(self.mostrar_tabla_simbolos)
         self.home.bt_arbol.clicked.connect(self.generar_recorridos)
         self.home.bt_arbolLR.clicked.connect(self.generar_arbol_lr)  # respeta tu nombre de botón
         self.home.bt_zoom_in.clicked.connect(self.home.tx_ingreso.zoom_in)
@@ -160,7 +158,6 @@ class Main(QMainWindow):
 
         # Atajos (si existen en tu Ui_home)
         try:
-            self.home.shortcut_run_lexical.activated.connect(self.ev_lexico)
             self.home.shortcut_run_syntactic.activated.connect(self.ev_sintactico)
             self.home.shortcut_open.activated.connect(self.ev_archivo)
             self.home.shortcut_clear.activated.connect(self.ev_limpiar)
@@ -315,42 +312,6 @@ class Main(QMainWindow):
             self.home.tb_lexico.setRowCount(len(resultados))
             usar_fondo_oscuro = True
 
-            for i, token in enumerate(resultados):
-                # Alternancia de filas
-                if usar_fondo_oscuro:
-                    color_fondo = QColor("#1E1E1E")
-                    color_texto = QColor("#FFFFFF")
-                else:
-                    color_fondo = QColor("#2D2D2D")
-                    color_texto = QColor("#FFFFFF")
-                usar_fondo_oscuro = not usar_fondo_oscuro
-
-                linea = str(token.get("linea", "0"))
-                tipo = token.get("tipo", "DESCONOCIDO")
-                valor = str(token.get("valor", ""))
-                lexema = valor
-                patron = self._patron_por_tipo(tipo)
-
-                if tipo == "ERROR":
-                    color_fondo = QColor("#7E2D40")
-                    color_texto = QColor("#FFFFFF")
-
-                items = [
-                    QTableWidgetItem(linea),
-                    QTableWidgetItem(tipo),
-                    QTableWidgetItem(lexema),
-                    QTableWidgetItem(patron),
-                ]
-
-                for col, it in enumerate(items):
-                    it.setBackground(color_fondo)
-                    it.setForeground(color_texto)
-                    self.home.tb_lexico.setItem(i, col, it)
-
-            self.home.tb_lexico.setAlternatingRowColors(False)
-            self.home.tb_lexico.resizeColumnsToContents()
-            self.home.estado.showMessage(f"Análisis léxico completado: {len(resultados)} tokens encontrados")
-            self.home.analysisTabs.setCurrentIndex(0)
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error durante el análisis léxico: {str(e)}")
