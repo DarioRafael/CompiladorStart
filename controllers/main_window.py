@@ -2,7 +2,7 @@
 import os
 from PyQt5.QtWidgets import QMainWindow, QFileDialog, QTableWidgetItem, QMessageBox, QTextEdit, QPlainTextEdit
 from PyQt5.QtGui import QColor, QBrush, QFont, QTextCharFormat, QTextCursor
-
+import re
 # Ui (tu archivo existente)
 from view.home import Ui_home
 
@@ -152,6 +152,12 @@ class Main(QMainWindow):
 
         # Conectar eventos
         self.home.bt_sintactico.clicked.connect(self.ev_sintactico)
+        # Nuevo: botón semántico a su handler
+        try:
+            self.home.bt_semantico.clicked.connect(self.ev_semantico)
+        except Exception:
+            pass
+
         self.home.bt_archivo.clicked.connect(self.ev_archivo)
         self.home.bt_limpiar.clicked.connect(self.ev_limpiar)
         self.home.bt_arbol.clicked.connect(self.generar_recorridos)
@@ -166,7 +172,6 @@ class Main(QMainWindow):
             self.home.shortcut_clear.activated.connect(self.ev_limpiar)
             self.home.shortcut_tree.activated.connect(self.generar_recorridos)
         except Exception:
-            # Si alguno no existe, simplemente lo ignoramos
             pass
 
         # --- Runner Java (integración completa) ---
@@ -176,7 +181,7 @@ class Main(QMainWindow):
         self.runner.finished.connect(self._on_runner_finished) # exit code
         self.runner.error.connect(self._on_runner_error)       # errores de preparación
 
-        # Click en Run => compilar/ejecutar
+        # Click en Run => compilar/ejecutar (gateado)
         self.home.bt_run.clicked.connect(self._on_run_clicked)
 
         # --- Assembler / javap (integración completa) ---
@@ -189,7 +194,7 @@ class Main(QMainWindow):
         self.asm.error.connect(self._on_asm_error)           # errores de preparación
         self.asm.finished.connect(self._on_asm_finished)     # exit code
 
-        # Botón Ensamblador / atajos
+        # Botón Ensamblador / atajos (gateado)
         try:
             self.home.bt_asm.clicked.connect(self._on_generate_asm)
         except Exception:
@@ -203,14 +208,49 @@ class Main(QMainWindow):
         except Exception:
             pass
 
-        # Estado inicial
+        # Estado inicial / gating
         self.home.estado.showMessage("Analizador de código Java - Desarrollado con PyQt5 y PLY")
-        self.analisis_sintactico_realizado = False
+        self.sintactico_ok = False
+        self.semantico_ok = False
+        self._set_stage_enabled(can_semantic=False, can_after_semantic=False)
+
+    # =========
+    #  GATING
+    # =========
+    def _set_stage_enabled(self, *, can_semantic: bool, can_after_semantic: bool):
+        """Habilita/Deshabilita botones según el progreso."""
+        # Sintáctico siempre disponible
+        self.home.bt_sintactico.setEnabled(True)
+
+        # Semántico sólo si sintáctico OK
+        try:
+            self.home.bt_semantico.setEnabled(can_semantic)
+        except Exception:
+            pass
+
+        # Todo lo que va después del semántico
+        for btn in [
+            getattr(self.home, 'bt_arbol', None),
+            getattr(self.home, 'bt_arbolLR', None),
+            getattr(self.home, 'bt_triplos', None),
+            getattr(self.home, 'bt_cuadruplos', None),
+            getattr(self.home, 'bt_asm', None),
+            getattr(self.home, 'bt_run', None),
+        ]:
+            if btn is not None:
+                btn.setEnabled(can_after_semantic)
 
     # =======================
     #   RUN / OUTPUT HANDLERS
     # =======================
     def _on_run_clicked(self):
+        if not self.sintactico_ok:
+            QMessageBox.information(self, "Falta análisis", "Primero ejecuta el Análisis Sintáctico sin errores.")
+            return
+        if not self.semantico_ok:
+            QMessageBox.information(self, "Falta análisis", "Ejecuta el Análisis Semántico y corrige errores antes de RUN.")
+            return
+
         code = self.home.tx_ingreso.toPlainText().strip()
         if not code:
             QMessageBox.warning(self, "Advertencia", "No hay código para ejecutar.")
@@ -222,13 +262,13 @@ class Main(QMainWindow):
             self.home.tx_output.clear()
             self.home.lb_output_status.setText("Compilando y ejecutando...")
         except Exception:
-            pass  # por si aún no existe la pestaña (aunque en tu Ui sí existe)
+            pass
 
         # Deshabilitar Run mientras compila/ejecuta
         self.home.bt_run.setEnabled(False)
         self.home.estado.showMessage("Preparando ejecución...")
 
-        # Ejecutar (estructura simple: un archivo, sin package, con public class y main)
+        # Ejecutar (estructura simple)
         self.runner.run_code(code)
 
     def _on_runner_started(self, stage: str):
@@ -277,6 +317,13 @@ class Main(QMainWindow):
     #   ASM / DISASSEMBLER
     # =======================
     def _on_generate_asm(self):
+        if not self.sintactico_ok:
+            QMessageBox.information(self, "Falta análisis", "Primero ejecuta el Análisis Sintáctico sin errores.")
+            return
+        if not self.semantico_ok:
+            QMessageBox.information(self, "Falta análisis", "Ejecuta el Análisis Semántico y corrige errores antes del Ensamblador.")
+            return
+
         code = self.home.tx_ingreso.toPlainText().strip()
         if not code:
             QMessageBox.warning(self, "Advertencia", "No hay código para ensamblar.")
@@ -425,10 +472,10 @@ class Main(QMainWindow):
             self.home.estado.showMessage(f"Error: {str(e)}")
 
     # -----------------------------
-    # Análisis sintáctico
+    # Análisis sintáctico (solo sintaxis)
     # -----------------------------
     def ev_sintactico(self):
-        """Ejecuta pre-diagnóstico (estructural+semántico) y luego el análisis sintáctico PLY."""
+        """Ejecuta SOLO el análisis sintáctico y pinta resultados en su pestaña."""
         # Limpiar panel de salida sintáctica
         self.home.tx_sintactico.clear()
 
@@ -438,45 +485,46 @@ class Main(QMainWindow):
             QMessageBox.warning(self, "Advertencia", "No hay código para analizar.")
             return
 
-        # ====== Pre-chequeo estructural + semántico (subraya y bloquea si hay errores) ======
+        # Pre-chequeo estructural (paréntesis, llaves, corchetes, comillas, comentarios)
         pre = []
         try:
-            pre.extend(diag_struct(codigo))  # (), {}, [], "..." y '...', /*...*/
-        except Exception:
-            pass
-        try:
-            pre.extend(diag_sem(codigo))  # redeclaración, uso no declarado, tipos incompatibles, etc.
+            pre.extend(diag_struct(codigo))
         except Exception:
             pass
 
         if pre:
-            # pinta subrayado rojo
+            # subrayados
             self._last_errors = pre
             self._apply_diagnostics(pre)
-            # marcas en gutter si tu editors lo soporta
             try:
                 if hasattr(self.home.tx_ingreso, "set_error_lines"):
                     self.home.tx_ingreso.set_error_lines(sorted({e["line"] for e in pre}))
             except Exception:
                 pass
 
-            # listar en el panel sintáctico
+            # listar en sintáctico (⚠️ forzar 20px en todo el mensaje)
             html = "<html><body style='color:#DCDCDC; font-family: Consolas, monospace;'>"
             for e in pre:
-                html += f"<p style='color:#FF6B68;'>Error (L{e['line']}:C{e['col']}). {e['message']}</p>"
+                msg = e.get("message", "")
+                # si el mensaje trae spans internos, forzamos su font-size a 20px
+                msg = re.sub(r'font-size\s*:\s*\d+px', 'font-size:20px', msg)
+                html += (
+                    f"<p style='color:#FF6B68; font-size:20px; margin:6px 0;'>"
+                    f"Error (L{e['line']}:C{e['col']}). {msg}"
+                    f"</p>"
+                )
             html += "</body></html>"
             self.home.tx_sintactico.setHtml(html)
 
-            # bloquear árboles y marcar estado
-            self.analisis_sintactico_realizado = False
-            self.home.bt_arbol.setEnabled(False)
-            self.home.bt_arbolLR.setEnabled(False)
-            self.home.estado.showMessage("Errores detectados en diagnóstico previo. Corrige y vuelve a intentar.")
-            self.home.analysisTabs.setCurrentIndex(1)
+            # bloquear flujo
+            self.sintactico_ok = False
+            self.semantico_ok = False
+            self._set_stage_enabled(can_semantic=False, can_after_semantic=False)
+            self.home.estado.showMessage("Errores estructurales. Corrige y vuelve a intentar.")
+            self.home.analysisTabs.setCurrentWidget(self.home.syntaxTab)
             return
-        # =====================================================================
 
-        # Si llegamos aquí, no hubo errores previos: limpiar subrayados/gutter
+        # limpiar subrayados previos
         self._last_errors = []
         self._apply_diagnostics([])
         try:
@@ -485,69 +533,128 @@ class Main(QMainWindow):
         except Exception:
             pass
 
-        # ====== Análisis sintáctico PLY (tu flujo original) ======
+        # Análisis sintáctico PLY
         try:
             tabla_simbolos.limpiar()
             resultados = prueba_sintactica(codigo)
 
             html_output = "<html><body style='color:#DCDCDC; font-family: Consolas, monospace;'>"
             for item in resultados:
+                # fuerza 20px si el string ya viene con HTML y tamaños
+                item_20 = re.sub(r'font-size\s*:\s*\d+px', 'font-size:20px', item)
+
                 if "Error" in item:
-                    html_output += f"<p style='color:#FF6B68;'>{item}</p>"
+                    html_output += f"<p style='color:#FF6B68; font-size:20px; margin:6px 0;'>{item_20}</p>"
                 elif "Advertencia" in item:
-                    html_output += f"<p style='color:#FFA500;'>{item}</p>"
+                    html_output += f"<p style='color:#FFA500; font-size:20px; margin:6px 0;'>{item_20}</p>"
                 else:
-                    html_output += f"<p>{item}</p>"
+                    html_output += f"<p style='font-size:20px; margin:6px 0;'>{item_20}</p>"
             html_output += "</body></html>"
             self.home.tx_sintactico.setHtml(html_output)
 
             tiene_errores = any("Error" in item for item in resultados)
-            self.analisis_sintactico_realizado = not tiene_errores
+            self.sintactico_ok = not tiene_errores
 
-            # habilitar/bloquear botones de árbol
-            self.home.bt_arbol.setEnabled(self.analisis_sintactico_realizado)
-            self.home.bt_arbolLR.setEnabled(self.analisis_sintactico_realizado)
-
-            if tiene_errores:
-                self.home.estado.showMessage(
-                    "Análisis sintáctico completado con errores. No se pueden generar árboles."
-                )
+            if self.sintactico_ok:
+                self.home.estado.showMessage("Sintáctico OK. Ahora puedes ejecutar el Análisis Semántico.")
+                self._set_stage_enabled(can_semantic=True, can_after_semantic=False)
             else:
-                self.home.estado.showMessage(
-                    "Análisis sintáctico completado correctamente. Puede generar los árboles."
-                )
+                self.home.estado.showMessage("Análisis sintáctico con errores. Corrige antes de continuar.")
+                self._set_stage_enabled(can_semantic=False, can_after_semantic=False)
+                self.semantico_ok = False
 
-            self.home.analysisTabs.setCurrentIndex(1)
+            self.home.analysisTabs.setCurrentWidget(self.home.syntaxTab)
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error durante el análisis sintáctico: {str(e)}")
             self.home.estado.showMessage(f"Error: {str(e)}")
-            self.analisis_sintactico_realizado = False
-            self.home.bt_arbol.setEnabled(False)
-            self.home.bt_arbolLR.setEnabled(False)
+            self.sintactico_ok = False
+            self.semantico_ok = False
+            self._set_stage_enabled(can_semantic=False, can_after_semantic=False)
 
     # -----------------------------
-    # Recorridos del árbol (Pre/In/Post)
+    # Análisis semántico (solo semántica)
     # -----------------------------
-    def generar_recorridos(self):
+    def ev_semantico(self):
+        if not self.sintactico_ok:
+            QMessageBox.information(self, "Falta análisis", "Primero ejecuta el Análisis Sintáctico sin errores.")
+            return
+
+        try:
+            self.home.tx_semantico.clear()
+        except Exception:
+            pass
+
         codigo = self.home.tx_ingreso.toPlainText().strip()
         if not codigo:
             QMessageBox.warning(self, "Advertencia", "No hay código para analizar.")
             return
 
-        if not self.analisis_sintactico_realizado:
-            resp = QMessageBox.question(
-                self,
-                "Realizar análisis sintáctico",
-                "Es necesario realizar un análisis sintáctico antes de generar los recorridos. ¿Desea hacerlo ahora?",
-                QMessageBox.Yes | QMessageBox.No
-            )
-            if resp == QMessageBox.Yes:
-                self.ev_sintactico()
-                if not self.analisis_sintactico_realizado:
-                    return
+        try:
+            errors = diag_sem(codigo) or []
+
+            if errors:
+                parts = ["<html><body style='color:#DCDCDC; font-family: Consolas, monospace;'>"]
+                for e in errors:
+                    line = e.get("line", "?")
+                    col = e.get("col", "?")
+                    msg = e.get("message", "")
+
+                    # ⚙️ Fuerza cualquier font-size interno del mensaje a 20px
+                    try:
+                        import re
+                        msg = re.sub(r'font-size\s*:\s*\d+px', 'font-size:20px', msg)
+                    except Exception:
+                        pass
+
+                    parts.append(
+                        "<p style='margin:8px 0; font-size:20px; line-height:1.35;'>"
+                        f"<span style='color:#FF6B68; font-weight:bold;'>L{line}:C{col}</span> "
+                        f"{msg}"
+                        "</p>"
+                    )
+                parts.append("</body></html>")
+                self.home.tx_semantico.setHtml("".join(parts))
+
+                self.semantico_ok = False
+                self.home.estado.showMessage(f"Análisis semántico: {len(errors)} problema(s) detectado(s).")
+                self._set_stage_enabled(can_semantic=True, can_after_semantic=False)
             else:
-                return
+                self.home.tx_semantico.setHtml(
+                    "<html><body style='color:#DCDCDC; font-family: Consolas, monospace;'>"
+                    "<p style='font-size:20px; color:lime; font-weight:bold;'>✅ Análisis semántico sin errores</p>"
+                    "</body></html>"
+                )
+                self.semantico_ok = True
+                self.home.estado.showMessage("Semántico OK. Ya puedes generar Árbol/ASM/Triplos/Run.")
+                self._set_stage_enabled(can_semantic=True, can_after_semantic=True)
+
+            try:
+                self.home.analysisTabs.setCurrentWidget(self.home.semanticTab)
+            except Exception:
+                pass
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error durante el análisis semántico: {str(e)}")
+            self.home.estado.showMessage(f"Error: {str(e)}")
+            self.semantico_ok = False
+            self._set_stage_enabled(can_semantic=True, can_after_semantic=False)
+
+    # -----------------------------
+    # Recorridos del árbol (Pre/In/Post)
+    # -----------------------------
+    def generar_recorridos(self):
+        if not self.sintactico_ok:
+            QMessageBox.information(self, "Falta análisis", "Primero ejecuta el Análisis Sintáctico sin errores.")
+            return
+        if not self.semantico_ok:
+            QMessageBox.information(self, "Falta análisis", "Ejecuta el Análisis Semántico sin errores antes de generar el árbol.")
+            return
+
+        codigo = self.home.tx_ingreso.toPlainText().strip()
+        if not codigo:
+            QMessageBox.warning(self, "Advertencia", "No hay código para analizar.")
+            return
 
         self.home.treeWidget.clear()
         self.home.treeWidget.setHeaderLabel("Recorridos del Árbol")
@@ -566,7 +673,7 @@ class Main(QMainWindow):
                 )
                 return
 
-            self.home.analysisTabs.setCurrentIndex(3)
+            self.home.analysisTabs.setCurrentWidget(self.home.parseTreeTab)
             self.home.estado.showMessage(
                 "Recorridos del árbol generados correctamente (Pre-orden, In-orden, Post-orden)"
             )
@@ -578,24 +685,17 @@ class Main(QMainWindow):
     # Árbol LR (o árbol jerárquico)
     # -----------------------------
     def generar_arbol_lr(self):
+        if not self.sintactico_ok:
+            QMessageBox.information(self, "Falta análisis", "Primero ejecuta el Análisis Sintáctico sin errores.")
+            return
+        if not self.semantico_ok:
+            QMessageBox.information(self, "Falta análisis", "Ejecuta el Análisis Semántico sin errores antes de generar el árbol.")
+            return
+
         codigo = self.home.tx_ingreso.toPlainText().strip()
         if not codigo:
             QMessageBox.warning(self, "Advertencia", "No hay código para analizar.")
             return
-
-        if not self.analisis_sintactico_realizado:
-            resp = QMessageBox.question(
-                self,
-                "Realizar análisis sintáctico",
-                "Es necesario realizar un análisis sintáctico antes de generar los árboles. ¿Desea hacerlo ahora?",
-                QMessageBox.Yes | QMessageBox.No
-            )
-            if resp == QMessageBox.Yes:
-                self.ev_sintactico()
-                if not self.analisis_sintactico_realizado:
-                    return
-            else:
-                return
 
         try:
             from trees.arbol_visual import mostrar_arbol_recorridos  # tu archivo existente
@@ -623,6 +723,11 @@ class Main(QMainWindow):
         simbolos = tabla_simbolos.obtener_todos()  # dict nombre -> info
         if not simbolos:
             self.home.estado.showMessage("No hay símbolos definidos en la tabla de símbolos")
+            # Ir igualmente a la pestaña de símbolos
+            try:
+                self.home.analysisTabs.setCurrentWidget(self.home.symbolsTab)
+            except Exception:
+                pass
             return
 
         # 1) Asignar direcciones
@@ -666,8 +771,15 @@ class Main(QMainWindow):
 
         self.home.tb_simbolos.resizeColumnsToContents()
         self.home.estado.showMessage(f"Tabla de símbolos: {len(simbolos)} símbolos encontrados")
-        self.home.analysisTabs.setCurrentIndex(2)
+        # Ir a la pestaña correcta por widget
+        try:
+            self.home.analysisTabs.setCurrentWidget(self.home.symbolsTab)
+        except Exception:
+            pass
 
+    # -----------------------------
+    # Subrayado de diagnósticos en editor
+    # -----------------------------
     def _apply_diagnostics(self, errors):
         edit = self.home.tx_ingreso
         selections = []
@@ -685,12 +797,11 @@ class Main(QMainWindow):
             cur.setPosition(start)
             cur.setPosition(start + length, QTextCursor.KeepAnchor)
 
-            sel = QTextEdit.ExtraSelection()  # ✅ siempre esta clase
+            sel = QTextEdit.ExtraSelection()
             sel.cursor = cur
             sel.format = fmt
             selections.append(sel)
 
-        # deja que CodeEditor componga con sus propios highlights
         try:
             edit.setExtraSelections(selections)
         except Exception:
@@ -703,6 +814,8 @@ class Main(QMainWindow):
             errs.extend(diag_struct(code))
         except Exception:
             pass
+        # Nota: mantenemos semántico en vivo para subrayado, pero el gating
+        # exige ejecutar ev_semantico explícitamente para “aprobar” la etapa.
         try:
             errs.extend(diag_sem(code))
         except Exception:
@@ -711,7 +824,7 @@ class Main(QMainWindow):
         self._last_errors = errs
         self._apply_diagnostics(errs)
 
-        # marcas en gutter si tu editors lo soporta
+        # marcas en gutter si tu editor lo soporta
         try:
             if hasattr(self.home.tx_ingreso, "set_error_lines"):
                 self.home.tx_ingreso.set_error_lines(sorted({e["line"] for e in errs}))
@@ -719,7 +832,7 @@ class Main(QMainWindow):
             pass
 
         if errs:
-            self.home.estado.showMessage(f"{len(errs)} problemas detectados.")
+            self.home.estado.showMessage(f"{len(errs)} problema(s) detectado(s).")
         else:
             self.home.estado.showMessage("Sin problemas.")
 
@@ -736,13 +849,11 @@ class Main(QMainWindow):
         def dynamic_words():
             try:
                 syms = tabla_simbolos.obtener_todos()  # dict {nombre: info}
-                # nombres "limpios" (sin prefijo global. si tu tabla usa 'global.X', recórtalo)
+                # nombres "limpios"
                 out = []
                 for k in syms.keys():
-                    # si viniera con "scope.nombre", quita el prefijo para autocompletar
                     name = k.split('.', 1)[1] if '.' in k else k
                     out.append(name)
-                # agrega también palabras reservadas por si la tabla está vacía
                 out.extend(JAVA_KEYWORDS)
                 # únicos
                 out = list(dict.fromkeys(out))
@@ -779,10 +890,16 @@ class Main(QMainWindow):
         self.home.lb_output_status.clear()
         self.home.tb_lexico.setRowCount(0)
         self.home.tx_sintactico.clear()
+        try:
+            self.home.tx_semantico.clear()
+        except Exception:
+            pass
         self.home.tb_simbolos.setRowCount(0)
         self.home.treeWidget.clear()
         tabla_simbolos.limpiar()
         self.home.estado.showMessage("Todos los campos han sido limpiados")
-        self.analisis_sintactico_realizado = False
-        self.home.bt_arbol.setEnabled(True)
-        self.home.bt_arbolLR.setEnabled(True)
+
+        # Reset flags y gating
+        self.sintactico_ok = False
+        self.semantico_ok = False
+        self._set_stage_enabled(can_semantic=False, can_after_semantic=False)

@@ -253,12 +253,13 @@ def t_LLADER(t):
 
 # NUEVO: Manejo especial del operador de asignación
 def t_ASIGNAR(t):
-    r'='
+    r'=(?!=)'   # '=' que NO está seguido de '='  -> no choca con '=='
     # Si acabamos de ver un identificador, preparamos para capturar su valor
     if estados.get('ultimo_identificador') and not estados.get('esperando_valor'):
         estados['esperando_valor'] = True
         estados['variable_reciente'] = estados['ultimo_identificador']
     return t
+
 
 
 def t_DECIMAL(t):

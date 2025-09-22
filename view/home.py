@@ -306,6 +306,16 @@ class Ui_home(object):
         self.syntaxLayout.addWidget(self.tx_sintactico)
         self.analysisTabs.addTab(self.syntaxTab, "Análisis Sintáctico")
 
+        # --- Semántico (NUEVO)
+        self.semanticTab = QtWidgets.QWidget()
+        self.semanticLayout = QtWidgets.QVBoxLayout(self.semanticTab)
+        self.tx_semantico = QtWidgets.QTextEdit()
+        self.tx_semantico.setPlaceholderText("Resultados del análisis semántico...")
+        self.tx_semantico.setReadOnly(True)
+        self.semanticLayout.addWidget(self.tx_semantico)
+        self.analysisTabs.addTab(self.semanticTab, "Análisis Semántico")
+
+
         # --- Símbolos (igual que Triplos/Cuádruplos)
         self.symbolsTab = QtWidgets.QWidget()
         self.symbolsLayout = QtWidgets.QVBoxLayout(self.symbolsTab)
@@ -435,6 +445,14 @@ class Ui_home(object):
         self.bt_sintactico.setIcon(QtGui.QIcon.fromTheme("dialog-ok-apply"))
         self.bt_sintactico.setStyleSheet("QPushButton { background-color: #D69D45; border-color: #E0A64D; }"
                                          "QPushButton:hover { background-color: #E0A64D; }")
+
+        self.bt_semantico = QtWidgets.QPushButton("Analizar Semántica")
+        self.bt_semantico.setIcon(QtGui.QIcon.fromTheme("system-search"))
+        self.bt_semantico.setStyleSheet(
+            "QPushButton { background-color: #C1862C; border-color: #D09233; }"
+            "QPushButton:hover { background-color: #D09233; }"
+        )
+
         self.bt_simbolos = QtWidgets.QPushButton("Ver Tabla Símbolos")
         self.bt_simbolos.setIcon(QtGui.QIcon.fromTheme("x-office-spreadsheet"))
         self.bt_simbolos.setStyleSheet("QPushButton { background-color: #5F9EA0; border-color: #70AEB0; }"
@@ -457,6 +475,7 @@ class Ui_home(object):
 
         self.bottomControls.addWidget(self.bt_lexico)
         self.bottomControls.addWidget(self.bt_sintactico)
+        self.bottomControls.addWidget(self.bt_semantico)
         self.bottomControls.addWidget(self.bt_simbolos)
         self.bottomControls.addWidget(self.bt_arbol)
         self.bottomControls.addWidget(self.bt_arbolLR)
@@ -478,6 +497,7 @@ class Ui_home(object):
         # Shortcuts
         self.shortcut_run_lexical = QtWidgets.QShortcut(QtGui.QKeySequence("F5"), home)
         self.shortcut_run_syntactic = QtWidgets.QShortcut(QtGui.QKeySequence("F6"), home)
+        self.shortcut_run_semantic = QtWidgets.QShortcut(QtGui.QKeySequence("F8"), home)
         self.shortcut_open = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+O"), home)
         self.shortcut_clear = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+L"), home)
         self.shortcut_tree = QtWidgets.QShortcut(QtGui.QKeySequence("F7"), home)
@@ -495,7 +515,9 @@ class Ui_home(object):
         self.bt_output_clear.clicked.connect(self.tx_output.clear)
         self.bt_asm.clicked.connect(lambda: self.analysisTabs.setCurrentWidget(self.asmTab))
         self.bt_asm_clear.clicked.connect(self.tx_asm.clear)
-
+        self.bt_arbol.clicked.connect(lambda: self.analysisTabs.setCurrentWidget(self.parseTreeTab))
+        self.shortcut_tree.activated.connect(lambda: self.analysisTabs.setCurrentWidget(self.parseTreeTab))
+        print(self.analysisTabs.indexOf(self.parseTreeTab))  # Should match "Recorridos del Árbol"
 
         # Conexiones de análisis
         self.bt_lexico.clicked.connect(self.analizar_lexico)
@@ -849,12 +871,13 @@ class Ui_home(object):
         home.setWindowTitle(_translate("home", "Analizador de Código Java"))
         self.analysisTabs.setTabText(0, _translate("home", "Análisis Léxico"))
         self.analysisTabs.setTabText(1, _translate("home", "Análisis Sintáctico"))
-        self.analysisTabs.setTabText(2, _translate("home", "Tabla de Símbolos"))
-        self.analysisTabs.setTabText(3, _translate("home", "Recorridos del Árbol"))
-        self.analysisTabs.setTabText(4, _translate("home", "Triplos"))
-        self.analysisTabs.setTabText(5, _translate("home", "Cuádruplos"))
-        self.analysisTabs.setTabText(6, _translate("home", "Código Ensamblador"))
-        self.analysisTabs.setTabText(7, _translate("home", "Salida del código"))
+        self.analysisTabs.setTabText(2, _translate("home", "Análisis Semantico"))
+        self.analysisTabs.setTabText(3, _translate("home", "Tabla de Símbolos"))
+        self.analysisTabs.setTabText(4, _translate("home", "Recorridos del Árbol"))
+        self.analysisTabs.setTabText(5, _translate("home", "Triplos"))
+        self.analysisTabs.setTabText(6, _translate("home", "Cuádruplos"))
+        self.analysisTabs.setTabText(7, _translate("home", "Código Ensamblador"))
+        self.analysisTabs.setTabText(8, _translate("home", "Salida del código"))
 
         # Tooltips y textos de botones
         self.bt_lexico.setToolTip(_translate("home", "Realizar análisis léxico (F5)"))

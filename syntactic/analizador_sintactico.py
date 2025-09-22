@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import ply.yacc as yacc
 from lexer.analizador_lexico import tokens
 from lexer.analizador_lexico import tabla_simbolos
@@ -6,7 +7,9 @@ from lexer.analizador_lexico import construir_lexer
 # Resultado del análisis
 resultado_gramatica = []
 
-# Definir precedencia de operadores
+# -----------------------------
+# Precedencia de operadores
+# -----------------------------
 precedence = (
     ('right', 'ASIGNAR', 'SUMAASIGNAR', 'RESTAASIGNAR', 'MULTASIGNAR', 'DIVASIGNAR', 'MODULOASIGNAR'),
     ('left', 'OR'),
@@ -24,49 +27,48 @@ precedence = (
     ('left', 'PUNTO'),
 )
 
-# Variables para seguimiento del programa
-alcance_actual = []  # Pila para seguimiento de alcances
-variables_declaradas = {}  # Diccionario para seguimiento de variables
+# (Opcional) Seguimiento de alcances si lo necesitas más adelante
+alcance_actual = []
+variables_declaradas = {}
 
 
-# Función auxiliar para verificar si una variable existe en cualquier alcance
+# =========================
+#  Auxiliares de símbolos
+# =========================
 def verificar_variable_existe(nombre):
-    """Verifica si una variable existe en la tabla de símbolos considerando todos los alcances"""
-    # Buscar primero en alcance local
+    """Verifica si una variable existe en la tabla de símbolos considerando todos los alcances."""
     if f"local.{nombre}" in tabla_simbolos.simbolos:
         return True
-    # Buscar en alcance de método main
     if f"main.{nombre}" in tabla_simbolos.simbolos:
         return True
-    # Buscar en alcance global
     if nombre in tabla_simbolos.simbolos:
         return True
     return False
 
 
-# Función auxiliar para marcar variable como usada en cualquier alcance
 def marcar_variable_usada(nombre):
-    """Marca una variable como usada buscando en todos los alcances"""
-    # Buscar primero en alcance local
+    """Marca una variable como usada buscando en todos los alcances."""
     if f"local.{nombre}" in tabla_simbolos.simbolos:
         tabla_simbolos.simbolos[f"local.{nombre}"]['usado'] = True
         return True
-    # Buscar en alcance de método main
     if f"main.{nombre}" in tabla_simbolos.simbolos:
         tabla_simbolos.simbolos[f"main.{nombre}"]['usado'] = True
         return True
-    # Buscar en alcance global
     if nombre in tabla_simbolos.simbolos:
         tabla_simbolos.simbolos[nombre]['usado'] = True
         return True
     return False
 
 
+# =========================
+#  Gramática
+# =========================
 def p_programa(p):
     'programa : codigo'
     if len(resultado_gramatica) == 0:
         resultado_gramatica.append(
-            "<span style='font-size:20px; color:lime;'>✅ Análisis sintáctico finalizado sin errores</span>")
+            "<span style='font-size:20px; color:lime;'>✅ Análisis sintáctico finalizado sin errores</span>"
+        )
 
 
 def p_codigo(p):
@@ -78,7 +80,6 @@ def p_codigo(p):
 def p_declaracion_clase(p):
     '''declaracion_clase : PUBLIC CLASS IDENTIFICADOR LLAIZQ contenido_clase LLADER
                          | CLASS IDENTIFICADOR LLAIZQ contenido_clase LLADER'''
-    # No necesitamos registrar la clase aquí, ya lo hace el léxico
     p[0] = "Declaración de clase válida"
 
 
@@ -94,8 +95,7 @@ def p_contenido_clase(p):
 def p_declaracion_atributo(p):
     '''declaracion_atributo : modificador tipo IDENTIFICADOR PUNTOCOMA
                             | modificador tipo IDENTIFICADOR ASIGNAR expresion PUNTOCOMA'''
-    # El léxico ya maneja el registro de variables
-    p[0] = f"Declaración de atributo válida"
+    p[0] = "Declaración de atributo válida"
 
 
 def p_modificador(p):
@@ -107,10 +107,7 @@ def p_modificador(p):
                    | PROTECTED STATIC
                    | STATIC
                    | empty'''
-    if len(p) > 1:
-        p[0] = p[1]
-    else:
-        p[0] = "default"
+    p[0] = p[1] if len(p) > 1 else "default"
 
 
 def p_declaracion_metodo(p):
@@ -120,7 +117,6 @@ def p_declaracion_metodo(p):
                           | modificador VOID IDENTIFICADOR PARIZQ PARDER LLAIZQ sentencias LLADER
                           | modificador tipo MAIN PARIZQ STRING CORIZQ CORDER IDENTIFICADOR PARDER LLAIZQ sentencias LLADER
                           | modificador VOID MAIN PARIZQ STRING CORIZQ CORDER IDENTIFICADOR PARDER LLAIZQ sentencias LLADER'''
-    # El léxico ya maneja el registro de métodos
     p[0] = "Declaración de método válida"
 
 
@@ -129,7 +125,6 @@ def p_parametros(p):
                   | parametros COMA tipo IDENTIFICADOR
                   | STRING CORIZQ CORDER IDENTIFICADOR
                   | empty'''
-    # El léxico ya maneja el registro de parámetros
     p[0] = "Parámetros válidos"
 
 
@@ -178,15 +173,13 @@ def p_declaracion_variable(p):
                             | tipo IDENTIFICADOR CORIZQ CORDER ASIGNAR NEW tipo CORIZQ expresion CORDER
                             | tipo IDENTIFICADOR CORIZQ CORDER ASIGNAR LLAIZQ lista_expresiones LLADER
                             | tipo IDENTIFICADOR CORIZQ expresion CORDER'''
-    # Verificar que el tipo sea un tipo válido
+    # Validación de tipo legible (los tokens de tipo traen el lexema en minúsculas)
     tipos_validos = ['int', 'boolean', 'char', 'byte', 'short', 'long', 'float', 'double', 'String']
     if p[1] not in tipos_validos:
         resultado_gramatica.append(
-            f"<span style='color:red; font-size:18px; font-weight:bold;'>Error de sintaxis en línea {p.lineno(1)}: Tipo de variable no válido '{p[1]}'</span>"
+            f"<span style='color:red; font-size:20px; font-weight:bold;'>Error de sintaxis en línea {p.lineno(1)}: Tipo de variable no válido '{p[1]}'</span>"
         )
-
-    # El léxico ya maneja el registro de variables, aquí solo validamos
-    p[0] = f"Declaración de variable válida"
+    p[0] = "Declaración de variable válida"
 
 
 def p_lista_expresiones(p):
@@ -204,13 +197,11 @@ def p_asignacion(p):
                   | IDENTIFICADOR MULTASIGNAR expresion
                   | IDENTIFICADOR DIVASIGNAR expresion
                   | IDENTIFICADOR MODULOASIGNAR expresion'''
-    # Verificar que la variable esté declarada usando la función auxiliar
     nombre = p[1]
     if not verificar_variable_existe(nombre):
-        resultado_gramatica.append(f"Error en línea {p.lineno(1)}: Variable '{nombre}' no declarada")
+        resultado_gramatica.append(f"<span style='font-size:20px; color:#FF6B68;'>Error en línea {p.lineno(1)}: Variable '{nombre}' no declarada</span>")
     else:
         marcar_variable_usada(nombre)
-
     p[0] = f"Asignación válida a {nombre}"
 
 
@@ -219,17 +210,11 @@ def p_incremento_decremento(p):
                              | IDENTIFICADOR DECREMENTO
                              | INCREMENTO IDENTIFICADOR
                              | DECREMENTO IDENTIFICADOR'''
-    # Verificar que la variable esté declarada
-    if p[1] == '++' or p[1] == '--':
-        nombre = p[2]
-    else:
-        nombre = p[1]
-
+    nombre = p[2] if p[1] in ('++', '--') else p[1]
     if not verificar_variable_existe(nombre):
-        resultado_gramatica.append(f"Error en línea {p.lineno(1)}: Variable '{nombre}' no declarada")
+        resultado_gramatica.append(f"<span style='font-size:20px; color:#FF6B68;'>Error en línea {p.lineno(1)}: Variable '{nombre}' no declarada</span>")
     else:
         marcar_variable_usada(nombre)
-
     p[0] = f"Incremento/decremento válido de {nombre}"
 
 
@@ -288,13 +273,11 @@ def p_caso_switch(p):
 def p_llamada_metodo(p):
     '''llamada_metodo : IDENTIFICADOR PARIZQ argumentos PARDER
                       | IDENTIFICADOR PARIZQ PARDER'''
-    # Verificar que el método esté declarado
     nombre = p[1]
     if not verificar_variable_existe(nombre):
-        resultado_gramatica.append(f"Error en línea {p.lineno(1)}: Método '{nombre}' no declarado")
+        resultado_gramatica.append(f"<span style='font-size:20px; color:#FF6B68;'>Error en línea {p.lineno(1)}: Método '{nombre}' no declarado</span>")
     else:
         marcar_variable_usada(nombre)
-
     p[0] = f"Llamada válida al método {nombre}"
 
 
@@ -364,16 +347,13 @@ def p_expresion_primaria(p):
                           | NULL
                           | llamada_metodo
                           | IDENTIFICADOR PUNTO IDENTIFICADOR'''
-    # Verificar solo si es un identificador simple
     if p.slice[1].type == 'IDENTIFICADOR':
         nombre = p[1]
-        # Verificar si es una palabra reservada o literal
         if nombre not in ['true', 'false', 'null']:
             if not verificar_variable_existe(nombre):
-                resultado_gramatica.append(f"Error en línea {p.lineno(1)}: Variable '{nombre}' no declarada")
+                resultado_gramatica.append(f"<span style='font-size:20px; color:#FF6B68;'>Error en línea {p.lineno(1)}: Variable '{nombre}' no declarada</span>")
             else:
                 marcar_variable_usada(nombre)
-
     p[0] = p[1]
 
 
@@ -382,55 +362,72 @@ def p_empty(p):
     pass
 
 
-# Manejo de errores mejorado
+# =========================
+# Manejo de errores (PANIC MODE)
+# =========================
 def p_error(p):
-    global resultado_gramatica
-
+    """
+    Recolecta múltiples errores:
+    - Reporta el error actual
+    - Entra en 'panic mode' y descarta tokens hasta un sincronizador ( ; ) } )
+    - Llama a parser.errok() para poder continuar
+    """
     if not p:
-        error = "Error de sintaxis al final del archivo"
-        resultado_gramatica.append(error)
+        resultado_gramatica.append(
+            "<span style='font-size:20px; color:#FF6B68;'>Error de sintaxis: fin de archivo inesperado</span>"
+        )
         return
 
-    linea_actual = p.lineno if hasattr(p, 'lineno') else -1
-
-    if hasattr(p, 'lexer') and hasattr(p.lexer, 'lexdata'):
-        data = p.lexer.lexdata.split('\n')
-
-        for i, line in enumerate(data):
-            if i + 1 == linea_actual and "main" in line and ("String[]" in line or "String [ ]" in line):
-                if p.type in ('CORIZQ', 'CORDER'):
-                    parser.errok()
-                    return
-
+    # Mensaje base
     if p.type == 'IDENTIFICADOR':
-        error = f"Error de sintaxis en línea {p.lineno}: '{p.value}' podría necesitar ser declarado primero"
+        msg = f"'{p.value}' podría necesitar ser declarado primero"
     elif p.type in ('CORDER', 'CORIZQ'):
-        error = f"Error de sintaxis en línea {p.lineno}: Uso incorrecto de corchetes '[]'"
+        msg = "Uso incorrecto de corchetes '[]'"
     elif p.type in ('PARDER', 'PARIZQ'):
-        error = f"Error de sintaxis en línea {p.lineno}: Desbalance de paréntesis '()'"
+        msg = "Desbalance de paréntesis '()'"
     elif p.type in ('LLADER', 'LLAIZQ'):
-        error = f"Error de sintaxis en línea {p.lineno}: Desbalance de llaves '{{}}'"
+        msg = "Desbalance de llaves '{}'"
     elif p.type == 'PUNTOCOMA':
-        error = f"Error de sintaxis en línea {p.lineno}: Punto y coma ';' inesperado o faltante"
+        msg = "Punto y coma ';' inesperado o faltante"
     else:
-        error = f"Error de sintaxis en línea {p.lineno}: Token inesperado '{p.value}' de tipo {p.type}"
+        msg = f"Token inesperado '{p.value}' de tipo {p.type}"
 
-    resultado_gramatica.append(error)
-    parser.errok()
+    resultado_gramatica.append(
+        f"<span style='font-size:20px; color:#FF6B68;'>Error de sintaxis en línea {p.lineno}: {msg}</span>"
+    )
+
+    # --- Panic mode: descartar hasta token seguro ---
+    # Importante: esto permite seguir acumulando más errores
+    parser.errok()  # limpia el estado de error
+    # Consumir tokens hasta un sincronizador; si no hay más, salimos
+    while True:
+        tok = parser.token()
+        if not tok:
+            break
+        if tok.type in ('PUNTOCOMA', 'PARDER', 'LLADER'):
+            # Punto de sincronización encontrado: paramos aquí.
+            break
 
 
-# Inicializar el analizador sintáctico
-parser = yacc.yacc()
+# =========================
+# Construcción del parser (UNA VEZ)
+# =========================
+# Usamos NullLogger para evitar spam en consola; write_tables=False para no crear archivos .py
+parser = yacc.yacc(errorlog=yacc.NullLogger(), write_tables=False, debug=False)
 
 
-# Función para analizar un código fuente completo
+# =========================
+# API de análisis
+# =========================
 def prueba_sintactica(data):
+    """
+    Analiza el código y retorna la lista de mensajes (errores/advertencias/ok).
+    NOTA: ya NO reconstruimos el parser aquí; reutilizamos el global.
+    """
     global resultado_gramatica
 
     lexer = construir_lexer()
     lexer.lineno = 1
-
-    parser = yacc.yacc()
 
     resultado_gramatica.clear()
     tabla_simbolos.limpiar()
@@ -440,74 +437,36 @@ def prueba_sintactica(data):
         return resultado_gramatica
 
     try:
+        # chequeo mínimo de "class"
         if "class" not in data and "Class" not in data:
             resultado_gramatica.append(
-                "Error: El código no parece ser un programa Java válido. Debe contener una clase.")
+                "<span style='font-size:20px; color:#FF6B68;'>Error: El código no parece ser un programa Java válido. Debe contener una clase.</span>"
+            )
             return resultado_gramatica
 
-        # Verificar balanceo de caracteres (código existente)
-        contadores = {'(': 0, ')': 0, '{': 0, '}': 0, '"': 0, "'": 0, '[': 0, ']': 0}
-        en_comentario_linea = False
-        en_comentario_bloque = False
-        i = 0
-
-        while i < len(data):
-            if not en_comentario_bloque and i < len(data) - 1 and data[i:i + 2] == '//':
-                en_comentario_linea = True
-            elif not en_comentario_linea and i < len(data) - 1 and data[i:i + 2] == '/*':
-                en_comentario_bloque = True
-                i += 2
-                continue
-            elif en_comentario_bloque and i < len(data) - 1 and data[i:i + 2] == '*/':
-                en_comentario_bloque = False
-                i += 2
-                continue
-            elif en_comentario_linea and data[i] == '\n':
-                en_comentario_linea = False
-
-            if not en_comentario_linea and not en_comentario_bloque:
-                if data[i] in contadores:
-                    contadores[data[i]] += 1
-
-            i += 1
-
-        # Verificar balanceos
-        if contadores['('] != contadores[')']:
-            resultado_gramatica.append(
-                f"Error: Desbalance de paréntesis - {contadores['(']} abiertos y {contadores[')']} cerrados")
-        if contadores['{'] != contadores['}']:
-            resultado_gramatica.append(
-                f"Error: Desbalance de llaves - {contadores['{']} abiertas y {contadores['}']} cerradas")
-        if contadores['['] != contadores[']']:
-            resultado_gramatica.append(
-                f"Error: Desbalance de corchetes - {contadores['[']} abiertos y {contadores[']']} cerrados")
-        if contadores['"'] % 2 != 0:
-            resultado_gramatica.append(f"Error: Número impar de comillas dobles (\") - posible cadena no cerrada")
-        if contadores["'"] % 2 != 0:
-            resultado_gramatica.append(f"Error: Número impar de comillas simples (') - posible carácter no cerrado")
-
-        # Analizar el código
-        result = parser.parse(data, lexer=lexer)
+        # Ejecutar el parser (tracking para líneas/cols más precisas si amplías)
+        result = parser.parse(data, lexer=lexer, tracking=True)
         if result:
             resultado_gramatica.append(result)
 
-        # Verificar variables sin usar con mejor filtrado
+        # Advertencias: variables sin usar
         variables_sin_usar = []
         for nombre_completo, info in tabla_simbolos.simbolos.items():
-            # Filtrar clases, métodos y args
             if (info['tipo'] not in ['CLASS', 'METHOD'] and
-                    not info.get('usado', False) and
-                    'args' not in nombre_completo):
-                # Extraer solo el nombre de la variable (sin prefijo de alcance)
+                not info.get('usado', False) and
+                'args' not in nombre_completo):
                 nombre_simple = nombre_completo.split('.')[-1] if '.' in nombre_completo else nombre_completo
                 variables_sin_usar.append((nombre_simple, info))
 
         for nombre, info in variables_sin_usar:
             resultado_gramatica.append(
-                f"Advertencia: Variable '{nombre}' declarada en línea {info['linea']} pero no utilizada")
+                f"<span style='font-size:20px; color:#FFA500;'>Advertencia: Variable '{nombre}' declarada en línea {info['linea']} pero no utilizada</span>"
+            )
 
     except Exception as e:
-        resultado_gramatica.append(f"Error durante el análisis: {str(e)}")
+        resultado_gramatica.append(
+            f"<span style='font-size:20px; color:#FF6B68;'>Error durante el análisis: {str(e)}</span>"
+        )
 
     return resultado_gramatica
 
@@ -518,10 +477,8 @@ if __name__ == '__main__':
             s = input('Ingrese código Java >>> ')
             if not s.strip():
                 continue
-
             resultados = prueba_sintactica(s)
             for r in resultados:
                 print(r)
-
         except EOFError:
             break
