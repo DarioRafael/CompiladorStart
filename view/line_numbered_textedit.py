@@ -190,8 +190,21 @@ class CodeEditor(QtWidgets.QPlainTextEdit):
     # =========================================================
     # Errores en gutter
     # =========================================================
+    # En CodeEditor
     def set_error_lines(self, lines):
-        self._error_lines = set(lines or [])
+        # Acepta iterables con enteros (1-based). Filtra None/<=0.
+        try:
+            clean = {int(x) for x in (lines or []) if isinstance(x, (int,)) and x > 0}
+        except Exception:
+            clean = set()
+            for x in (lines or []):
+                try:
+                    xi = int(x)
+                    if xi > 0:
+                        clean.add(xi)
+                except Exception:
+                    pass
+        self._error_lines = clean
         self._lineNumberArea.update()
 
     # =========================================================

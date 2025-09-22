@@ -903,3 +903,54 @@ class Main(QMainWindow):
         self.sintactico_ok = False
         self.semantico_ok = False
         self._set_stage_enabled(can_semantic=False, can_after_semantic=False)
+
+    # -----------------------------
+    # Gutter (números rojos) centralizado
+    # -----------------------------
+    def _update_gutter_from_errors(self):
+        """
+        Usa self._last_errors (estructural + sintáctico + semántico, lo que tengas)
+        y convierte sus rangos start/length a todas las líneas afectadas (1-based).
+        Si algún error trae 'line', se usa también como respaldo.
+        """
+        edit = self.home.tx_ingreso
+        doc = edit.document()
+        marked = set()
+
+        for e in (self._last_errors or []):
+            # 1) Si hay rango start/length: convertir a bloques
+            start = e.get("start")
+            length = e.get("length")
+            if isinstance(start, int) and isinstance(length, int) and length > 0:
+                try:
+                    end_pos = max(0, min(start + length, doc.characterCount() - 1))
+                    cur = QtGui.QTextCursor(doc)
+                    cur.setPosition(start)
+                    start_block = doc.findBlock(start)
+                    end_block = doc.findBlock(end_pos)
+
+                    blk = start_block
+                    while blk.isValid():
+                        # blockNumber es 0-based, ponemos 1-based para el gutter
+                        marked.add(blk.blockNumber() + 1)
+                        if blk.position() >= end_block.position():
+                            break
+                        blk = blk.next()
+                except Exception:
+                    pass
+
+            # 2) Respaldo: si viene 'line' (1-based normalmente), úsala
+            ln = e.get("line")
+            try:
+                if isinstance(ln, int) and ln > 0:
+                    marked.add(int(ln))
+            except Exception:
+                pass
+
+        # Enviar al editor (limpia si no hay errores)
+        try:
+            if hasattr(edit, "set_error_lines"):
+                edit.set_error_lines(sorted(marked))
+        except Exception:
+            pass
+
