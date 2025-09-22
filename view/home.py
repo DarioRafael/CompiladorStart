@@ -247,10 +247,19 @@ class Ui_home(object):
         self.bt_archivo.setStyleSheet("QPushButton { background-color: #3279B7; border-color: #3C8DCC; }"
                                       "QPushButton:hover { background-color: #3C8DCC; }")
 
+        self.bt_asm = QtWidgets.QPushButton("Ensamblar")
+        self.bt_asm.setIcon(QtGui.QIcon.fromTheme("code-context"))
+        self.bt_asm.setStyleSheet(
+            "QPushButton { background-color: #3279B7; border-color: #3C8DCC; }"
+            "QPushButton:hover { background-color: #3C8DCC; }"
+        )
+
         self.bt_run = QtWidgets.QPushButton("Run")
         self.bt_run.setIcon(QtGui.QIcon.fromTheme("media-playback-start"))
         self.bt_run.setStyleSheet("QPushButton { background-color: #3279B7; border-color: #3C8DCC; }"
                                   "QPushButton:hover { background-color: #3C8DCC; }")
+
+
 
         self.bt_limpiar = QtWidgets.QPushButton("Limpiar")
         self.bt_limpiar.setIcon(QtGui.QIcon.fromTheme("edit-clear"))
@@ -264,6 +273,7 @@ class Ui_home(object):
         self.bt_zoom_in.setToolTip("Zoom +  (Shift + \"+\")")
 
         self.topControls.addWidget(self.bt_archivo)
+        self.topControls.addWidget(self.bt_asm)
         self.topControls.addWidget(self.bt_run)
         self.topControls.addWidget(self.bt_limpiar)
         self.topControls.addStretch()
@@ -361,6 +371,32 @@ class Ui_home(object):
         self.quadruplesLayout.addWidget(self.tb_cuadruplos)
         self.analysisTabs.addTab(self.quadruplesTab, "Cuádruplos")
 
+        # --- Código Ensamblador ---
+        self.asmTab = QtWidgets.QWidget()
+        self.asmLayout = QtWidgets.QVBoxLayout(self.asmTab)
+
+        self.asmHeader = QtWidgets.QHBoxLayout()
+        self.lb_asm_status = QtWidgets.QLabel("Código ensamblador:")
+        self.lb_asm_status.setStyleSheet("QLabel { color: #F0AD4E; }")
+        self.bt_asm_clear = QtWidgets.QPushButton("Limpiar ensamblador")
+        self.bt_asm_clear.setIcon(QtGui.QIcon.fromTheme("edit-clear"))
+        self.bt_asm_clear.setStyleSheet(
+            "QPushButton { background-color: #5F5F5F; border-color: #6A6A6A; }"
+            "QPushButton:hover { background-color: #6A6A6A; }"
+        )
+        self.asmHeader.addWidget(self.lb_asm_status)
+        self.asmHeader.addStretch()
+        self.asmHeader.addWidget(self.bt_asm_clear)
+        self.asmLayout.addLayout(self.asmHeader)
+
+        self.tx_asm = ZoomablePlainTextEdit(start_pt=18)
+        self.tx_asm.setReadOnly(True)
+        self.tx_asm.setPlaceholderText("Aquí aparecerá el código ensamblador...")
+        self.tx_asm.setObjectName("tx_asm_console")
+        self.asmLayout.addWidget(self.tx_asm)
+
+        self.analysisTabs.addTab(self.asmTab, "Código Ensamblador")
+
         # --- Salida
         self.outputTab = QtWidgets.QWidget()
         self.outputLayout = QtWidgets.QVBoxLayout(self.outputTab)
@@ -382,6 +418,8 @@ class Ui_home(object):
         self.tx_output.setObjectName("tx_output_console")
         self.outputLayout.addWidget(self.tx_output)
         self.analysisTabs.addTab(self.outputTab, "Salida del código")
+
+
 
         # Tabs al layout principal
         self.mainLayout.addWidget(self.analysisTabs)
@@ -455,6 +493,9 @@ class Ui_home(object):
         self.bt_run.clicked.connect(lambda: self.analysisTabs.setCurrentWidget(self.outputTab))
         self.shortcut_output.activated.connect(lambda: self.analysisTabs.setCurrentWidget(self.outputTab))
         self.bt_output_clear.clicked.connect(self.tx_output.clear)
+        self.bt_asm.clicked.connect(lambda: self.analysisTabs.setCurrentWidget(self.asmTab))
+        self.bt_asm_clear.clicked.connect(self.tx_asm.clear)
+
 
         # Conexiones de análisis
         self.bt_lexico.clicked.connect(self.analizar_lexico)
@@ -740,8 +781,10 @@ class Ui_home(object):
         self.analysisTabs.setTabText(3, _translate("home", "Recorridos del Árbol"))
         self.analysisTabs.setTabText(4, _translate("home", "Triplos"))
         self.analysisTabs.setTabText(5, _translate("home", "Cuádruplos"))
-        self.analysisTabs.setTabText(6, _translate("home", "Salida del código"))
+        self.analysisTabs.setTabText(6, _translate("home", "Código Ensamblador"))
+        self.analysisTabs.setTabText(7, _translate("home", "Salida del código"))
 
+        # Tooltips y textos de botones
         self.bt_lexico.setToolTip(_translate("home", "Realizar análisis léxico (F5)"))
         self.bt_sintactico.setToolTip(_translate("home", "Realizar análisis sintáctico (F6)"))
         self.bt_simbolos.setToolTip(_translate("home", "Mostrar tabla de símbolos"))
@@ -750,10 +793,17 @@ class Ui_home(object):
         self.bt_triplos.setToolTip(_translate("home", "Generar representación en triplos del código"))
         self.bt_cuadruplos.setToolTip(_translate("home", "Generar representación en cuádruplos del código"))
         self.bt_archivo.setToolTip(_translate("home", "Abrir un archivo Java (Ctrl+O)"))
+        self.bt_asm.setToolTip(_translate("home", "Generar/mostrar código ensamblador (F10)"))
         self.bt_run.setToolTip(_translate("home", "Ejecutar el código y mostrar la salida"))
         self.bt_limpiar.setToolTip(_translate("home", "Limpiar todos los campos (Ctrl+L)"))
         self.bt_zoom_in.setToolTip(_translate("home", "Zoom + (Shift + \"+\")"))
         self.bt_zoom_out.setToolTip(_translate("home", "Zoom - (Shift + \"-\")"))
+
+        # Títulos y textos estáticos
         self.sourceGroup.setTitle(_translate("home", "Código Fuente Java"))
+        self.lb_asm_status.setText(_translate("home", "Código ensamblador:"))
+        self.bt_asm_clear.setText(_translate("home", "Limpiar ensamblador"))
         self.lb_output_status.setText(_translate("home", "Salida del código (solo diseño):"))
         self.bt_output_clear.setText(_translate("home", "Limpiar salida"))
+
+

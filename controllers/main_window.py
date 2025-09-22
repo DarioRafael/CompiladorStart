@@ -18,6 +18,9 @@ from editors.completer import JavaAutoCompleter, JAVA_KEYWORDS
 # >>> Runner Java (nuevo)
 from runners.java_runner import JavaRunner
 
+# >>> Desensamblador / “ensamblador JVM” (nuevo)
+from assembler.bytecode_disassembler import JavaBytecodeDisassembler
+
 
 # ===============================
 #   Asignador de Direcciones
@@ -56,7 +59,7 @@ class AddressAllocator:
         return self._type_sizes.get(t, self.word_size)  # por defecto, referencia
 
     def _align_up(self, n: int, a: int) -> int:
-        return ( (n + (a - 1)) // a ) * a
+        return ((n + (a - 1)) // a) * a
 
     def _align_down(self, n: int, a: int) -> int:
         return -self._align_up(abs(n), a)
@@ -176,6 +179,30 @@ class Main(QMainWindow):
         # Click en Run => compilar/ejecutar
         self.home.bt_run.clicked.connect(self._on_run_clicked)
 
+        # --- Assembler / javap (integración completa) ---
+        self.asm = JavaBytecodeDisassembler(parent=self)
+
+        # Señales -> UI
+        self.asm.started.connect(self._on_asm_started)       # "compile" | "disasm"
+        self.asm.output.connect(self._append_asm_stream)     # stdout/stderr en vivo
+        self.asm.result.connect(self._set_asm_full_listing)  # listado final completo
+        self.asm.error.connect(self._on_asm_error)           # errores de preparación
+        self.asm.finished.connect(self._on_asm_finished)     # exit code
+
+        # Botón Ensamblador / atajos
+        try:
+            self.home.bt_asm.clicked.connect(self._on_generate_asm)
+        except Exception:
+            pass
+        try:
+            self.home.bt_asm_clear.clicked.connect(lambda: self.home.tx_asm.clear())
+        except Exception:
+            pass
+        try:
+            self.home.shortcut_asm.activated.connect(self._on_generate_asm)
+        except Exception:
+            pass
+
         # Estado inicial
         self.home.estado.showMessage("Analizador de código Java - Desarrollado con PyQt5 y PLY")
         self.analisis_sintactico_realizado = False
@@ -246,6 +273,87 @@ class Main(QMainWindow):
             pass
         self.home.estado.showMessage("Error al preparar/ejecutar.", 5000)
 
+    # =======================
+    #   ASM / DISASSEMBLER
+    # =======================
+    def _on_generate_asm(self):
+        code = self.home.tx_ingreso.toPlainText().strip()
+        if not code:
+            QMessageBox.warning(self, "Advertencia", "No hay código para ensamblar.")
+            return
+
+        # Ir a la pestaña de ensamblador y limpiar consola ASM
+        try:
+            self.home.analysisTabs.setCurrentWidget(self.home.asmTab)
+            self.home.tx_asm.clear()
+            self.home.lb_asm_status.setText("Compilando y desensamblando...")
+        except Exception:
+            pass
+
+        # Deshabilitar botón mientras corre
+        try:
+            self.home.bt_asm.setEnabled(False)
+        except Exception:
+            pass
+        self.home.estado.showMessage("Preparando desensamblado (javac + javap)...")
+
+        # Ejecutar pipeline (javac -> javap)
+        self.asm.disassemble(code)
+
+    def _on_asm_started(self, stage: str):
+        # stage: "compile" o "disasm"
+        try:
+            self.home.analysisTabs.setCurrentWidget(self.home.asmTab)
+            self.home.lb_asm_status.setText("Compilando..." if stage == "compile" else "Ensamblando...")
+        except Exception:
+            pass
+        self.home.estado.showMessage("Compilando..." if stage == "compile" else "Generando código ensamblador...")
+
+    def _append_asm_stream(self, text: str):
+        # flujo en vivo (stdout/stderr) mientras corre
+        try:
+            self.home.tx_asm.moveCursor(QTextCursor.End)
+            self.home.tx_asm.insertPlainText(text)
+            self.home.tx_asm.moveCursor(QTextCursor.End)
+        except Exception:
+            pass
+
+    def _set_asm_full_listing(self, listing: str):
+        # listado completo de javap (cuando termina ok)
+        try:
+            self.home.tx_asm.setPlainText(listing)
+            self.home.tx_asm.moveCursor(QTextCursor.Start)
+        except Exception:
+            pass
+
+    def _on_asm_error(self, message: str):
+        try:
+            self.home.analysisTabs.setCurrentWidget(self.home.asmTab)
+            self.home.lb_asm_status.setText("Error")
+            self.home.tx_asm.appendPlainText(f"[ERROR] {message}\n")
+        except Exception:
+            pass
+        self.home.estado.showMessage("Error al generar ensamblador.", 5000)
+
+    def _on_asm_finished(self, code: int):
+        try:
+            self.home.bt_asm.setEnabled(True)
+        except Exception:
+            pass
+
+        if code == 0:
+            self.home.estado.showMessage("Código ensamblador generado correctamente.", 5000)
+            try:
+                self.home.lb_asm_status.setText("Finalizado.")
+            except Exception:
+                pass
+        else:
+            self.home.estado.showMessage(f"Desensamblado finalizado con errores (código {code}).", 5000)
+            try:
+                self.home.lb_asm_status.setText(f"Finalizado con errores (código {code}).")
+            except Exception:
+                pass
+
     # -----------------------------
     # Utilidad: expresión por tipo
     # -----------------------------
@@ -311,7 +419,6 @@ class Main(QMainWindow):
 
             self.home.tb_lexico.setRowCount(len(resultados))
             usar_fondo_oscuro = True
-
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error durante el análisis léxico: {str(e)}")
@@ -552,8 +659,8 @@ class Main(QMainWindow):
             for col, it in enumerate(items):
                 it.setBackground(bg)
                 it.setForeground(fg)
-                f = it.font();
-                f.setBold(True);
+                f = it.font()
+                f.setBold(True)
                 it.setFont(f)
                 self.home.tb_simbolos.setItem(i, col, it)
 
