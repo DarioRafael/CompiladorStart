@@ -632,41 +632,85 @@ class Ui_home(object):
             self.analysisTabs.setCurrentWidget(self.symbolsTab)
             return
 
+        # Función para formatear valores
+        def formatear_valor(valor):
+            """Formatea el valor para mostrar en la tabla"""
+            if valor is None:
+                return "null"
+            elif valor == "":
+                return "(vacío)"
+            elif isinstance(valor, bool):
+                return "true" if valor else "false"
+            elif isinstance(valor, (int, float)):
+                return str(valor)
+            elif isinstance(valor, str):
+                # Si ya tiene comillas, las mantenemos
+                if valor.startswith('"') and valor.endswith('"'):
+                    return valor
+                # Si es un valor literal sin comillas, lo mostramos tal como está
+                return valor
+            else:
+                return str(valor)
+
         # Asignador sencillo (inline) para demo/visual (64-bit)
-        def asignar_direcciones(symtab: dict):
+        def asignar_direcciones(symtab: dict, formato: str = "hex", base_global: int = 0x0000):
+            """
+            formato: "hex" | "dec" | "simbolico"
+            base_global: offset inicial para direcciones globales (p.ej. 0x1000 para que se vea 'realista')
+            """
             align = 8
 
-            def al_up(n, a):
+            def al_up(n, a):  # alineación hacia arriba
                 return ((n + (a - 1)) // a) * a
 
-            _sizes = {"INT": 4, "FLOAT": 4, "DOUBLE": 8, "BOOLEAN": 1, "CHAR": 1, "LONG": 8, "SHORT": 2, "BYTE": 1,
-                      "VOID": 0, "STRING": 8, "REFERENCE": 8}
+            _sizes = {
+                "INT": 4, "FLOAT": 4, "DOUBLE": 8, "BOOLEAN": 1, "CHAR": 1,
+                "LONG": 8, "SHORT": 2, "BYTE": 1, "VOID": 0, "STRING": 8, "REFERENCE": 8
+            }
 
-            def sz(tipo):
+            def sz(tipo):  # tamaño por tipo; default 8 para 64-bit
                 return _sizes.get((tipo or "").upper(), 8)
 
-            global_off = 0
-            frames = {}  # alcance -> locals_off (neg)
+            def fmt_global(off):
+                if formato == "hex":
+                    return f"0x{off:04X}"
+                if formato == "dec":
+                    return str(off)
+                # simbólico (como lo tenías)
+                return f"GLOBAL+{off}"
+
+            def fmt_local(off):
+                # off es negativo (desplaza desde FP)
+                if formato == "hex":
+                    return f"[FP-0x{abs(off):X}]"
+                if formato == "dec":
+                    return f"[FP{off}]"  # ya trae el signo
+                return f"[FP{off}]"
+
+            global_off = base_global
+            frames = {}  # alcance -> offset local (negativo)
             out = {}
+
             for name in sorted(symtab.keys()):
                 info = symtab[name] or {}
                 tipo = info.get("tipo", "")
-                alcance = info.get("alcance", "global")
-                is_global = (alcance or "global").lower() in ("global", "namespace", "module")
-                s = max(1, sz(tipo));
-                s = al_up(s, align)
-                if is_global:
-                    base = al_up(global_off, align)
-                    out[name] = f"GLOBAL+{base}"
-                    global_off = base + s
+                alcance = (info.get("alcance", "global") or "global").lower()
+
+                s = al_up(max(1, sz(tipo)), align)
+
+                if alcance in ("global", "namespace", "module"):
+                    global_off = al_up(global_off, align)
+                    out[name] = fmt_global(global_off)
+                    global_off += s
                 else:
                     fr = frames.setdefault(alcance, 0)
                     fr -= s
                     frames[alcance] = fr
-                    out[name] = f"[FP{fr}]" if fr < 0 else f"[FP+{fr}]"
+                    out[name] = fmt_local(fr)
+
             return out
 
-        addr_map = asignar_direcciones(simbolos)
+        addr_map = asignar_direcciones(simbolos, formato="hex", base_global=0x1000)
 
         self.tb_simbolos.setUpdatesEnabled(False)
         self.tb_simbolos.clearContents()
@@ -676,32 +720,60 @@ class Ui_home(object):
         bg = QColor("#1E1E1E");
         fg = QColor("#DCDCDC")
 
+        # Colores especiales para diferentes tipos de símbolos
+        color_variable = QColor("#4EC9B0")  # Verde agua para variables
+        color_metodo = QColor("#DCDCAA")  # Amarillo para métodos
+        color_clase = QColor("#569CD6")  # Azul para clases
+        color_valor_asignado = QColor("#CE9178")  # Naranja para valores asignados
+
         for i, nombre in enumerate(names):
             info = simbolos[nombre]
             tipo = info.get("tipo", "")
-            valor = str(info.get("valor", ""))
+            valor_raw = info.get("valor", "")
+            valor_formateado = formatear_valor(valor_raw)
             linea = str(info.get("linea", ""))
             alcance = info.get("alcance", "global")
             direccion = addr_map.get(nombre, "")
 
+            # Determinar colores según el tipo
+            if tipo.upper() == "CLASS":
+                color_tipo = color_clase
+            elif tipo.upper() == "METHOD":
+                color_tipo = color_metodo
+            else:
+                color_tipo = color_variable
+
             items = [
                 QtWidgets.QTableWidgetItem(nombre),
                 QtWidgets.QTableWidgetItem(tipo),
-                QtWidgets.QTableWidgetItem(valor),
+                QtWidgets.QTableWidgetItem(valor_formateado),
                 QtWidgets.QTableWidgetItem(linea),
                 QtWidgets.QTableWidgetItem(alcance),
                 QtWidgets.QTableWidgetItem(direccion),
             ]
-            for it in items:
-                it.setBackground(bg);
-                it.setForeground(fg)
-                it.setTextAlignment(QtCore.Qt.AlignCenter)
+
             for col, it in enumerate(items):
+                it.setBackground(bg)
+                if col == 1:  # Columna de tipo
+                    it.setForeground(color_tipo)
+                elif col == 2 and valor_raw not in (None, "", "None"):  # Columna de valor con valor asignado
+                    it.setForeground(color_valor_asignado)
+                else:
+                    it.setForeground(fg)
+                it.setTextAlignment(QtCore.Qt.AlignCenter)
                 self.tb_simbolos.setItem(i, col, it)
 
         self.tb_simbolos.setUpdatesEnabled(True)
         self.analysisTabs.setCurrentWidget(self.symbolsTab)
-        self.estado.showMessage(f"Tabla de símbolos: {len(names)} símbolos", 3000)
+
+        # Contar símbolos con valores asignados
+        con_valores = sum(1 for info in simbolos.values()
+                          if info.get('valor') not in (None, "", "None"))
+
+        self.estado.showMessage(
+            f"Tabla de símbolos: {len(names)} símbolos ({con_valores} con valores asignados)",
+            3000
+        )
 
     def llenar_tabla_triplos(self):
         try:

@@ -48,7 +48,9 @@ BUILTIN_CHAIN = {"System", "out", "print", "println"}
 
 
 def _mk(start: int, length: int, line: int, col: int, message: str) -> Dict:
-    return {"start": start, "length": length, "line": line, "col": col, "message": message}
+    # Formatear mensaje con HTML y estilo rojo
+    styled_message = f"<span style='color:red; font-size:24px; font-weight:bold;'>{message}</span>"
+    return {"start": start, "length": length, "line": line, "col": col, "message": styled_message}
 
 def _tok_len(tok) -> int:
     try:
@@ -274,32 +276,32 @@ def _check_assign_compat(errors, code, op_tok, target_ty: str, expr_ty: str):
         # aceptamos 'array' o 'object' (new T[...])
         if expr_ty not in ('array', 'object'):
             errors.append(_mk(op_tok.lexpos, 1, line, col,
-                              f"Incompatibilidad de tipos: se esperaba '{target_ty}' y se asigna '{expr_ty}'."))
+                              f"❌ Incompatibilidad de tipos: se esperaba '{target_ty}' y se asigna '{expr_ty}'."))
         return
 
     if target_ty == 'String':
         if expr_ty not in ('String',):
             errors.append(_mk(op_tok.lexpos, 1, line, col,
-                              f"Incompatibilidad de tipos: se esperaba 'String' y se asigna '{expr_ty}'."))
+                              f"❌ Incompatibilidad de tipos: se esperaba 'String' y se asigna '{expr_ty}'."))
         return
 
     if target_ty == 'boolean':
         if expr_ty not in ('boolean',):
             errors.append(_mk(op_tok.lexpos, 1, line, col,
-                              f"Incompatibilidad de tipos: se esperaba 'boolean' y se asigna '{expr_ty}'."))
+                              f"❌ Incompatibilidad de tipos: se esperaba 'boolean' y se asigna '{expr_ty}'."))
         return
 
     if target_ty == 'char':
         if expr_ty not in ('char',):
             errors.append(_mk(op_tok.lexpos, 1, line, col,
-                              f"Incompatibilidad de tipos: se esperaba 'char' y se asigna '{expr_ty}'."))
+                              f"❌ Incompatibilidad de tipos: se esperaba 'char' y se asigna '{expr_ty}'."))
         return
 
     # numéricos
     if is_numeric(target_ty):
         if not is_numeric(expr_ty):
             errors.append(_mk(op_tok.lexpos, 1, line, col,
-                              f"Incompatibilidad de tipos: se esperaba tipo numérico y se asigna '{expr_ty}'."))
+                              f"❌ Incompatibilidad de tipos: se esperaba tipo numérico y se asigna '{expr_ty}'."))
         return
 
 
@@ -317,13 +319,13 @@ def _check_compound_compat(errors, code, op_tok, target_ty: str, expr_ty: str):
         if expr_ty in ('String', 'numeric'):
             return
         errors.append(_mk(op_tok.lexpos, 1, line, col,
-                          f"Incompatibilidad: 'String' no puede concatenar '{expr_ty}'."))
+                          f"❌ Incompatibilidad: 'String' no puede concatenar '{expr_ty}'."))
         return
 
     # cualquier otra compuesta espera numéricos
     if not is_numeric(target_ty) or not is_numeric(expr_ty):
         errors.append(_mk(op_tok.lexpos, 1, line, col,
-                          f"Incompatibilidad: operador '{op_tok.type}' requiere tipos numéricos."))
+                          f"❌ Incompatibilidad: operador '{op_tok.type}' requiere tipos numéricos."))
         return
 
 
@@ -363,7 +365,7 @@ def analyze_semantics(code: str) -> List[Dict]:
         cur = scopes[-1]
         if name in cur:
             errors.append(_mk(tok_name.lexpos, _tok_len(tok_name), _line_of(tok_name), _col_of(code, tok_name),
-                              f"Redeclaración de variable '{name}' en el mismo alcance."))
+                              f"❌ Redeclaración de variable '{name}' en el mismo alcance."))
         else:
             cur[name] = typ
 
@@ -481,7 +483,7 @@ def analyze_semantics(code: str) -> List[Dict]:
                 decl_ty = resolve(name)
                 if decl_ty is None and name != 'args':
                     errors.append(_mk(t.lexpos, _tok_len(t), _line_of(t), _col_of(code, t),
-                                      f"Variable '{name}' no declarada en este alcance."))
+                                      f"❌ Variable '{name}' no declarada en este alcance."))
 
                 expr_ty, stop = _expr_type(toks, i + 2, resolve)
                 if decl_ty:
@@ -495,7 +497,7 @@ def analyze_semantics(code: str) -> List[Dict]:
                 # uso simple: validar declaración (excepto args/System)
                 if resolve(name) is None and name not in BUILTIN_CHAIN and name != 'args':
                     errors.append(_mk(t.lexpos, _tok_len(t), _line_of(t), _col_of(code, t),
-                                      f"Uso de variable '{name}' no declarada."))
+                                      f"❌ Uso de variable '{name}' no declarada."))
                 i += 1
                 continue
 
