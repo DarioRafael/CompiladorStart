@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 
 from PyQt5 import QtCore, QtGui, QtWidgets
+import re
+from widgets.error_table import ErrorTableView, ErrorItem
+from widgets.masm_view import MasmOutputView
+
 from .line_numbered_textedit import CodeEditor  # Import the new CodeEditor
 from intermediate_code.generador_triplos import GeneradorTriplos
 from intermediate_code.generador_cuadruplos import GeneradorCuadruplos
@@ -98,7 +102,6 @@ class Ui_home(object):
         Devuelve lista de filas: [linea, componente, lexema, patron]
         Reemplaza con tu analizador real.
         """
-        # Demo mínima: retorna algo para ver el layout
         if not codigo.strip():
             return []
         return [
@@ -192,18 +195,19 @@ class Ui_home(object):
             QTreeWidget::item:selected { background-color: #3A5C85; color: #FFFFFF; }
         """)
 
+        # ---- Central & layout principal
         self.centralWidget = QtWidgets.QWidget(home)
         self.mainLayout = QtWidgets.QVBoxLayout(self.centralWidget)
         self.mainLayout.setContentsMargins(20, 20, 20, 20)
         self.mainLayout.setSpacing(15)
 
-        # Título
+        # ---- Título
         self.titleLabel = QtWidgets.QLabel("Analizador de Código Java", self.centralWidget)
         self.titleLabel.setAlignment(QtCore.Qt.AlignCenter)
         self.titleLabel.setStyleSheet("QLabel { font-size: 28px; font-weight: bold; color: #F89406; padding: 10px; }")
         self.mainLayout.addWidget(self.titleLabel)
 
-        # Código fuente
+        # ---- Código fuente
         self.sourceGroup = QtWidgets.QGroupBox("Código Fuente Java")
         self.sourceGroup.setStyleSheet("""
             QGroupBox {
@@ -218,7 +222,7 @@ class Ui_home(object):
         self.sourceLayout = QtWidgets.QVBoxLayout(self.sourceGroup)
         self.tx_ingreso = CodeEditor()
         self.tx_ingreso.setPlaceholderText("Escribe tu código Java aquí o carga un archivo...")
-
+        self.tx_ingreso.setMinimumHeight(380)
         # Código por defecto con marcador $0
         default_code = (
             "public class Main {\n"
@@ -240,7 +244,7 @@ class Ui_home(object):
         self.sourceLayout.addWidget(self.tx_ingreso)
         self.mainLayout.addWidget(self.sourceGroup)
 
-        # Controles superiores
+        # ---- Controles superiores
         self.topControls = QtWidgets.QHBoxLayout()
         self.bt_archivo = QtWidgets.QPushButton("Cargar Archivo")
         self.bt_archivo.setIcon(QtGui.QIcon.fromTheme("document-open"))
@@ -258,8 +262,6 @@ class Ui_home(object):
         self.bt_run.setIcon(QtGui.QIcon.fromTheme("media-playback-start"))
         self.bt_run.setStyleSheet("QPushButton { background-color: #3279B7; border-color: #3C8DCC; }"
                                   "QPushButton:hover { background-color: #3C8DCC; }")
-
-
 
         self.bt_limpiar = QtWidgets.QPushButton("Limpiar")
         self.bt_limpiar.setIcon(QtGui.QIcon.fromTheme("edit-clear"))
@@ -282,11 +284,11 @@ class Ui_home(object):
         self.topControls.addWidget(self.bt_zoom_in)
         self.mainLayout.addLayout(self.topControls)
 
-        # Tabs
+        # ---- Tabs
         self.analysisTabs = QtWidgets.QTabWidget()
         self.analysisTabs.setStyleSheet("QTabWidget::tab-bar { alignment: center; }")
 
-        # --- Léxico (igual que Triplos/Cuádruplos)
+        # --- Léxico
         self.lexicalTab = QtWidgets.QWidget()
         self.lexicalLayout = QtWidgets.QVBoxLayout(self.lexicalTab)
         self.lexicalLayout.setContentsMargins(0, 0, 0, 0)
@@ -306,7 +308,7 @@ class Ui_home(object):
         self.syntaxLayout.addWidget(self.tx_sintactico)
         self.analysisTabs.addTab(self.syntaxTab, "Análisis Sintáctico")
 
-        # --- Semántico (NUEVO)
+        # --- Semántico
         self.semanticTab = QtWidgets.QWidget()
         self.semanticLayout = QtWidgets.QVBoxLayout(self.semanticTab)
         self.tx_semantico = QtWidgets.QTextEdit()
@@ -315,8 +317,24 @@ class Ui_home(object):
         self.semanticLayout.addWidget(self.tx_semantico)
         self.analysisTabs.addTab(self.semanticTab, "Análisis Semántico")
 
+        # --- Tabla de Errores
+        self.errorsTab = QtWidgets.QWidget()
+        self.errorsLayout = QtWidgets.QVBoxLayout(self.errorsTab)
+        self.tb_errores = self._crear_tabla(
+            6, ["#", "Tipo", "Mensaje", "Línea", "Columna", "Sugerencia"]
+        )
+        # Ajuste fino de header (por si tu helper cambia defaults)
+        header_err = self.tb_errores.horizontalHeader()
+        header_err.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
+        header_err.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
+        header_err.setSectionResizeMode(2, QtWidgets.QHeaderView.Stretch)
+        header_err.setSectionResizeMode(3, QtWidgets.QHeaderView.ResizeToContents)
+        header_err.setSectionResizeMode(4, QtWidgets.QHeaderView.ResizeToContents)
+        header_err.setSectionResizeMode(5, QtWidgets.QHeaderView.Stretch)
+        self.errorsLayout.addWidget(self.tb_errores, 1)
+        self.analysisTabs.addTab(self.errorsTab, "Tabla de Errores")
 
-        # --- Símbolos (igual que Triplos/Cuádruplos)
+        # --- Tabla de Símbolos
         self.symbolsTab = QtWidgets.QWidget()
         self.symbolsLayout = QtWidgets.QVBoxLayout(self.symbolsTab)
         self.symbolsLayout.setContentsMargins(0, 0, 0, 0)
@@ -324,7 +342,6 @@ class Ui_home(object):
         self.tb_simbolos = self._crear_tabla(
             6, ["Nombre", "Tipo", "Valor", "Línea", "Alcance", "Dirección"]
         )
-        # Ajuste fino de resize (primera col stretch, resto como toca)
         header_sym = self.tb_simbolos.horizontalHeader()
         header_sym.setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
         for i in range(1, 6):
@@ -332,9 +349,10 @@ class Ui_home(object):
                 header_sym.setSectionResizeMode(i, QtWidgets.QHeaderView.ResizeToContents)
             else:
                 header_sym.setSectionResizeMode(i, QtWidgets.QHeaderView.Stretch)
-
         self.symbolsLayout.addWidget(self.tb_simbolos, 1)
         self.analysisTabs.addTab(self.symbolsTab, "Tabla de Símbolos")
+
+
 
         # --- Recorridos del Árbol
         self.parseTreeTab = QtWidgets.QWidget()
@@ -357,7 +375,6 @@ class Ui_home(object):
         self.tb_triplos = self._crear_tabla(
             4, ["Índice", "Operador", "Arg1", "Arg2/Resultado"]
         )
-        # Afinar resize como lo tenías
         header_tri = self.tb_triplos.horizontalHeader()
         header_tri.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
         header_tri.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
@@ -381,7 +398,21 @@ class Ui_home(object):
         self.quadruplesLayout.addWidget(self.tb_cuadruplos)
         self.analysisTabs.addTab(self.quadruplesTab, "Cuádruplos")
 
-        # --- Código Ensamblador ---
+        # --- Ensamblador MASM (tabla)
+        self.masmTab = QtWidgets.QWidget()
+        self.masmLayout = QtWidgets.QVBoxLayout(self.masmTab)
+        self.masmLayout.setContentsMargins(0, 0, 0, 0)
+
+        # Crea el panel integrado y guárdalo en self.masmPane
+        self.masmPane = MasmOutputView(crear_tabla_fn=self._crear_tabla, parent=self.masmTab)
+        self.masmLayout.addWidget(self.masmPane)
+
+        self.analysisTabs.addTab(self.masmTab, "Ensamblador MASM")
+
+
+
+
+        # --- Código Ensamblador (consola)
         self.asmTab = QtWidgets.QWidget()
         self.asmLayout = QtWidgets.QVBoxLayout(self.asmTab)
 
@@ -407,7 +438,7 @@ class Ui_home(object):
 
         self.analysisTabs.addTab(self.asmTab, "Código Ensamblador")
 
-        # --- Salida
+        # --- Salida (consola)
         self.outputTab = QtWidgets.QWidget()
         self.outputLayout = QtWidgets.QVBoxLayout(self.outputTab)
         self.outputHeader = QtWidgets.QHBoxLayout()
@@ -429,18 +460,18 @@ class Ui_home(object):
         self.outputLayout.addWidget(self.tx_output)
         self.analysisTabs.addTab(self.outputTab, "Salida del código")
 
-
-
-        # Tabs al layout principal
+        # ---- Tabs al layout principal
         self.mainLayout.addWidget(self.analysisTabs)
 
-        # Controles inferiores
+        # ---- Controles inferiores
         self.bottomControls = QtWidgets.QHBoxLayout()
         self.bottomControls.setSpacing(20)
+
         self.bt_lexico = QtWidgets.QPushButton("Analizar Léxico")
         self.bt_lexico.setIcon(QtGui.QIcon.fromTheme("edit-find"))
         self.bt_lexico.setStyleSheet("QPushButton { background-color: #57A64A; border-color: #65B158; }"
                                      "QPushButton:hover { background-color: #65B158; }")
+
         self.bt_sintactico = QtWidgets.QPushButton("Analizar Sintaxis")
         self.bt_sintactico.setIcon(QtGui.QIcon.fromTheme("dialog-ok-apply"))
         self.bt_sintactico.setStyleSheet("QPushButton { background-color: #D69D45; border-color: #E0A64D; }"
@@ -457,17 +488,25 @@ class Ui_home(object):
         self.bt_simbolos.setIcon(QtGui.QIcon.fromTheme("x-office-spreadsheet"))
         self.bt_simbolos.setStyleSheet("QPushButton { background-color: #5F9EA0; border-color: #70AEB0; }"
                                        "QPushButton:hover { background-color: #70AEB0; }")
+
+        self.bt_errores = QtWidgets.QPushButton("Ver Tabla Errores")
+        self.bt_errores.setIcon(QtGui.QIcon.fromTheme("dialog-warning"))
+        self.bt_errores.setStyleSheet("QPushButton { background-color: #B22222; border-color: #CC3333; }"
+                                      "QPushButton:hover { background-color: #CC3333; }")
+
         self.bt_arbol = QtWidgets.QPushButton("Generar Recorridos")
         self.bt_arbol.setIcon(QtGui.QIcon.fromTheme("view-list-tree"))
         self.bt_arbol.setStyleSheet("QPushButton { background-color: #9370DB; border-color: #A080DD; }"
                                     "QPushButton:hover { background-color: #A080DD; }")
+
         self.bt_arbolLR = QtWidgets.QPushButton("Generar Árbol LR")
-        self.bt_arbol_lr = self.bt_arbolLR
+        self.bt_arbol_lr = self.bt_arbolLR  # alias si lo usas en otras partes
 
         self.bt_triplos = QtWidgets.QPushButton("Generar Triplos")
         self.bt_triplos.setIcon(QtGui.QIcon.fromTheme("applications-system"))
         self.bt_triplos.setStyleSheet("QPushButton { background-color: #B85450; border-color: #C85854; }"
                                       "QPushButton:hover { background-color: #C85854; }")
+
         self.bt_cuadruplos = QtWidgets.QPushButton("Generar Cuádruplos")
         self.bt_cuadruplos.setIcon(QtGui.QIcon.fromTheme("applications-system"))
         self.bt_cuadruplos.setStyleSheet("QPushButton { background-color: #8B4513; border-color: #A0521A; }"
@@ -477,6 +516,7 @@ class Ui_home(object):
         self.bottomControls.addWidget(self.bt_sintactico)
         self.bottomControls.addWidget(self.bt_semantico)
         self.bottomControls.addWidget(self.bt_simbolos)
+        self.bottomControls.addWidget(self.bt_errores)
         self.bottomControls.addWidget(self.bt_arbol)
         self.bottomControls.addWidget(self.bt_arbolLR)
         self.bottomControls.addWidget(self.bt_triplos)
@@ -484,7 +524,7 @@ class Ui_home(object):
         self.bottomControls.addStretch()
         self.mainLayout.addLayout(self.bottomControls)
 
-        # Status bar
+        # ---- Status bar (UNA SOLA VEZ)
         self.estado = QtWidgets.QStatusBar(home)
         self.estado.setStyleSheet("""
             QStatusBar {
@@ -494,7 +534,7 @@ class Ui_home(object):
         """)
         home.setStatusBar(self.estado)
 
-        # Shortcuts
+        # ---- Shortcuts
         self.shortcut_run_lexical = QtWidgets.QShortcut(QtGui.QKeySequence("F5"), home)
         self.shortcut_run_syntactic = QtWidgets.QShortcut(QtGui.QKeySequence("F6"), home)
         self.shortcut_run_semantic = QtWidgets.QShortcut(QtGui.QKeySequence("F8"), home)
@@ -502,34 +542,105 @@ class Ui_home(object):
         self.shortcut_clear = QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+L"), home)
         self.shortcut_tree = QtWidgets.QShortcut(QtGui.QKeySequence("F7"), home)
         self.shortcut_output = QtWidgets.QShortcut(QtGui.QKeySequence("F9"), home)
+        self.shortcut_asm = QtWidgets.QShortcut(QtGui.QKeySequence("F10"), home)
 
         home.setCentralWidget(self.centralWidget)
 
-        # Traducciones / tooltips
+        # ---- Traducciones / tooltips
         self.retranslateUi(home)
         QtCore.QMetaObject.connectSlotsByName(home)
 
-        # Conexiones básicas
+        # ---- Conexiones
+        # Salida
         self.bt_run.clicked.connect(lambda: self.analysisTabs.setCurrentWidget(self.outputTab))
         self.shortcut_output.activated.connect(lambda: self.analysisTabs.setCurrentWidget(self.outputTab))
         self.bt_output_clear.clicked.connect(self.tx_output.clear)
-        self.bt_asm.clicked.connect(lambda: self.analysisTabs.setCurrentWidget(self.asmTab))
+
+        # Ensamblador/MASM
+        self.bt_asm.clicked.connect(self.ensamblar_masm)
+        self.shortcut_asm.activated.connect(self.ensamblar_masm)
         self.bt_asm_clear.clicked.connect(self.tx_asm.clear)
+
+        # Árbol
         self.bt_arbol.clicked.connect(lambda: self.analysisTabs.setCurrentWidget(self.parseTreeTab))
         self.shortcut_tree.activated.connect(lambda: self.analysisTabs.setCurrentWidget(self.parseTreeTab))
-        print(self.analysisTabs.indexOf(self.parseTreeTab))  # Should match "Recorridos del Árbol"
 
-        # Conexiones de análisis
+        # Análisis
         self.bt_lexico.clicked.connect(self.analizar_lexico)
         self.bt_simbolos.clicked.connect(self.ver_tabla_simbolos)
+        self.bt_errores.clicked.connect(self.ver_tabla_errores)
 
         # Triplos / Cuádruplos
         self.bt_triplos.clicked.connect(self.llenar_tabla_triplos)
         self.bt_cuadruplos.clicked.connect(self.llenar_tabla_cuadruplos)
 
+        # ---- Instanciar controlador de errores (DESPUÉS de crear status bar)
+        self.error_table = ErrorTableView(
+            table=self.tb_errores,
+            tab_widget=self.analysisTabs,
+            tab_page=self.errorsTab,
+            status_bar=self.estado
+        )
+
     # ==========================
     # Acciones
     # ==========================
+    def ensamblar_masm(self):
+        try:
+            # tomar 'numero' desde tabla de símbolos o fallback en el código
+            n = self._obtener_numero(default=5)
+
+            # Llenar el panel MASM con ese número dinámico
+            self.masmPane.factorial_fill(numero=n)
+
+            # (Opcional) sincronizar la consola de "Código Ensamblador"
+            self.tx_asm.setPlainText(self.masmPane.tx_masm_plain.toPlainText())
+
+            # Mostrar pestaña y status
+            self.analysisTabs.setCurrentWidget(self.masmTab)
+            self.estado.showMessage(f"MASM (factorial) generado con numero={n}.", 3000)
+
+        except Exception as e:
+            import traceback;
+            traceback.print_exc()
+            self.estado.showMessage(f"Error al preparar MASM: {e}", 5000)
+
+    def ver_tabla_errores(self):
+        """
+        Recolecta errores de:
+          - Léxico: tokens tipo ERROR
+          - Sintáctico: mensajes devueltos por prueba_sintactica()
+          - Semántico: dicts devueltos por analyze_semantics()
+        Unifica y los manda a ErrorTableView.
+        """
+        codigo = self.tx_ingreso.toPlainText()
+
+        # 1) Léxico
+        _, lex_items = self._collect_lex_errors(codigo)
+
+        # 2) Sintaxis
+        syn_items = self._collect_syntax_errors(codigo)
+
+        # 3) Semántica
+        sem_items = self._collect_semantic_errors(codigo)
+
+        # Merge ordenado
+        items = self._merge_and_reindex_errors(lex_items, syn_items, sem_items)
+
+        # Mostrar
+        if not hasattr(self, "error_table"):
+            # fallback (no debería pasar si seguiste el setupUi)
+            self.error_table = ErrorTableView(
+                table=self.tb_errores,
+                tab_widget=self.analysisTabs,
+                tab_page=self.errorsTab,
+                status_bar=self.estado if hasattr(self, "estado") else None
+            )
+
+        self.error_table.show_items(items, status_prefix="Tabla de errores actualizada")
+
+
+
     def analizar_lexico(self):
         # Import local para evitar ciclos
         from lexer.analizador_lexico import prueba as prueba_lexica, tabla_simbolos
@@ -599,11 +710,9 @@ class Ui_home(object):
             usar_fondo_oscuro = True
             for i, token in enumerate(resultados):
                 if usar_fondo_oscuro:
-                    color_fondo = QColor("#1E1E1E");
-                    color_texto = QColor("#FFFFFF")
+                    color_fondo = QColor("#1E1E1E"); color_texto = QColor("#FFFFFF")
                 else:
-                    color_fondo = QColor("#2D2D2D");
-                    color_texto = QColor("#FFFFFF")
+                    color_fondo = QColor("#2D2D2D"); color_texto = QColor("#FFFFFF")
                 usar_fondo_oscuro = not usar_fondo_oscuro
 
                 linea = str(token.get("linea", "0"))
@@ -612,8 +721,7 @@ class Ui_home(object):
                 patron = _patron_por_tipo(tipo)
 
                 if tipo == "ERROR":
-                    color_fondo = QColor("#7E2D40");
-                    color_texto = QColor("#FFFFFF")
+                    color_fondo = QColor("#7E2D40"); color_texto = QColor("#FFFFFF")
 
                 items = [
                     QtWidgets.QTableWidgetItem(linea),
@@ -632,8 +740,7 @@ class Ui_home(object):
             self.estado.showMessage(f"Análisis léxico completado: {len(resultados)} tokens", 3000)
 
         except Exception as e:
-            import traceback;
-            traceback.print_exc()
+            import traceback; traceback.print_exc()
             self.estado.showMessage(f"Error durante el análisis léxico: {e}", 5000)
 
     def ver_tabla_simbolos(self):
@@ -654,9 +761,7 @@ class Ui_home(object):
             self.analysisTabs.setCurrentWidget(self.symbolsTab)
             return
 
-        # Función para formatear valores
         def formatear_valor(valor):
-            """Formatea el valor para mostrar en la tabla"""
             if valor is None:
                 return "null"
             elif valor == "":
@@ -666,23 +771,16 @@ class Ui_home(object):
             elif isinstance(valor, (int, float)):
                 return str(valor)
             elif isinstance(valor, str):
-                # Si ya tiene comillas, las mantenemos
                 if valor.startswith('"') and valor.endswith('"'):
                     return valor
-                # Si es un valor literal sin comillas, lo mostramos tal como está
                 return valor
             else:
                 return str(valor)
 
-        # Asignador sencillo (inline) para demo/visual (64-bit)
         def asignar_direcciones(symtab: dict, formato: str = "hex", base_global: int = 0x0000):
-            """
-            formato: "hex" | "dec" | "simbolico"
-            base_global: offset inicial para direcciones globales (p.ej. 0x1000 para que se vea 'realista')
-            """
             align = 8
 
-            def al_up(n, a):  # alineación hacia arriba
+            def al_up(n, a):
                 return ((n + (a - 1)) // a) * a
 
             _sizes = {
@@ -690,7 +788,7 @@ class Ui_home(object):
                 "LONG": 8, "SHORT": 2, "BYTE": 1, "VOID": 0, "STRING": 8, "REFERENCE": 8
             }
 
-            def sz(tipo):  # tamaño por tipo; default 8 para 64-bit
+            def sz(tipo):
                 return _sizes.get((tipo or "").upper(), 8)
 
             def fmt_global(off):
@@ -698,26 +796,23 @@ class Ui_home(object):
                     return f"0x{off:04X}"
                 if formato == "dec":
                     return str(off)
-                # simbólico (como lo tenías)
                 return f"GLOBAL+{off}"
 
             def fmt_local(off):
-                # off es negativo (desplaza desde FP)
                 if formato == "hex":
                     return f"[FP-0x{abs(off):X}]"
                 if formato == "dec":
-                    return f"[FP{off}]"  # ya trae el signo
+                    return f"[FP{off}]"
                 return f"[FP{off}]"
 
             global_off = base_global
-            frames = {}  # alcance -> offset local (negativo)
+            frames = {}
             out = {}
 
             for name in sorted(symtab.keys()):
                 info = symtab[name] or {}
                 tipo = info.get("tipo", "")
                 alcance = (info.get("alcance", "global") or "global").lower()
-
                 s = al_up(max(1, sz(tipo)), align)
 
                 if alcance in ("global", "namespace", "module"):
@@ -739,14 +834,12 @@ class Ui_home(object):
         names = sorted(simbolos.keys())
         self.tb_simbolos.setRowCount(len(names))
 
-        bg = QColor("#1E1E1E");
-        fg = QColor("#DCDCDC")
+        bg = QtGui.QColor("#1E1E1E"); fg = QtGui.QColor("#DCDCDC")
 
-        # Colores especiales para diferentes tipos de símbolos
-        color_variable = QColor("#4EC9B0")  # Verde agua para variables
-        color_metodo = QColor("#DCDCAA")  # Amarillo para métodos
-        color_clase = QColor("#569CD6")  # Azul para clases
-        color_valor_asignado = QColor("#CE9178")  # Naranja para valores asignados
+        color_variable = QtGui.QColor("#4EC9B0")
+        color_metodo = QtGui.QColor("#DCDCAA")
+        color_clase = QtGui.QColor("#569CD6")
+        color_valor_asignado = QtGui.QColor("#CE9178")
 
         for i, nombre in enumerate(names):
             info = simbolos[nombre]
@@ -757,7 +850,6 @@ class Ui_home(object):
             alcance = info.get("alcance", "global")
             direccion = addr_map.get(nombre, "")
 
-            # Determinar colores según el tipo
             if tipo.upper() == "CLASS":
                 color_tipo = color_clase
             elif tipo.upper() == "METHOD":
@@ -776,9 +868,9 @@ class Ui_home(object):
 
             for col, it in enumerate(items):
                 it.setBackground(bg)
-                if col == 1:  # Columna de tipo
+                if col == 1:
                     it.setForeground(color_tipo)
-                elif col == 2 and valor_raw not in (None, "", "None"):  # Columna de valor con valor asignado
+                elif col == 2 and valor_raw not in (None, "", "None"):
                     it.setForeground(color_valor_asignado)
                 else:
                     it.setForeground(fg)
@@ -788,7 +880,6 @@ class Ui_home(object):
         self.tb_simbolos.setUpdatesEnabled(True)
         self.analysisTabs.setCurrentWidget(self.symbolsTab)
 
-        # Contar símbolos con valores asignados
         con_valores = sum(1 for info in simbolos.values()
                           if info.get('valor') not in (None, "", "None"))
 
@@ -863,32 +954,200 @@ class Ui_home(object):
             traceback.print_exc()
             self.estado.showMessage(f"Error generando cuádruplos: {e}", 5000)
 
+    def _strip_html(self, s: str) -> str:
+        """Quita tags HTML para mostrar en celdas de la tabla."""
+        return re.sub(r'<[^>]*>', '', s or '').strip()
+
+    def _find_line_col_in_text(self, s: str):
+        """
+        Intenta extraer (linea, columna) de un mensaje de texto.
+        Busca patrones como:
+          - 'línea 12' o 'linea 12'
+          - 'columna 7' o 'col 7'
+        Devuelve (linea:int|None, columna:int|None)
+        """
+        if not s:
+            return None, None
+        # normaliza tildes y minúsculas
+        txt = s.lower()
+        mline = re.search(r'l[ií]nea\s+(\d+)', txt)
+        mcol = re.search(r'col(?:umna)?\s+(\d+)', txt)
+        ln = int(mline.group(1)) if mline else None
+        col = int(mcol.group(1)) if mcol else None
+        return ln, col
+
+    def _collect_lex_errors(self, codigo: str):
+        from lexer.analizador_lexico import prueba as prueba_lexica
+
+        tokens = prueba_lexica(codigo)  # lista de dicts
+        items = []
+        idx = 1
+        for t in tokens:
+            if t.get("tipo") == "ERROR":
+                msg = f"Token inválido '{t.get('valor')}'"
+                linea = t.get("linea")
+                col = (t.get("posicion") or 0) + 1
+                items.append(ErrorItem(idx, "Léxico", msg, linea, col, ""))
+                idx += 1
+
+        # Si no hubo errores léxicos, agregamos la línea de OK
+        if not items:
+            items.append(ErrorItem(idx, "Léxico", "✅ Análisis léxico finalizado sin errores", None, None, ""))
+
+        return tokens, items
+
+    def _collect_syntax_errors(self, codigo: str):
+        from syntactic.analizador_sintactico import prueba_sintactica
+
+        mensajes = prueba_sintactica(codigo)  # lista de strings/HTML
+        items = []
+        idx = 1
+        found_error_or_warning = False
+        found_success = False
+
+        for raw in mensajes:
+            text = self._strip_html(str(raw))
+            low = text.lower()
+
+            if "error" in low:
+                found_error_or_warning = True
+                linea, col = self._find_line_col_in_text(text)
+                items.append(ErrorItem(idx, "Sintáctico", text, linea, col, ""))
+                idx += 1
+            elif "advertencia" in low or "warning" in low:
+                found_error_or_warning = True
+                linea, col = self._find_line_col_in_text(text)
+                items.append(ErrorItem(idx, "Warning", text, linea, col, ""))
+                idx += 1
+            elif "análisis sintáctico finalizado sin errores" in low or "analisis sintactico finalizado sin errores" in low:
+                found_success = True
+
+        # Si no hubo errores/advertencias, aseguramos una línea OK sintáctica
+        if not found_error_or_warning:
+            msg_ok = "✅ Análisis sintáctico finalizado sin errores"
+            # usa el que vino del parser si lo detectamos; si no, igual mostramos OK
+            items.append(ErrorItem(idx, "Sintáctico", msg_ok, None, None, ""))
+
+        return items
+
+    def _collect_semantic_errors(self, codigo: str):
+        from semantics.java_semantics import analyze_semantics
+
+        sem_errors = analyze_semantics(codigo)  # [{start,length,line,col,message}]
+        items = []
+        idx = 1
+        for e in sem_errors:
+            msg = self._strip_html(e.get("message", "Error semántico"))
+            linea = e.get("line")
+            col = e.get("col")
+            items.append(ErrorItem(idx, "Semántico", msg, linea, col, ""))
+            idx += 1
+
+        # Si no hubo errores semánticos, agregamos la línea de OK
+        if not items:
+            items.append(ErrorItem(idx, "Semántico", "✅ Análisis semántico finalizado sin errores", None, None, ""))
+
+        return items
+
+    def _merge_and_reindex_errors(self, *lists):
+        """
+        Une varias listas de ErrorItem, las reindexa y aplica un orden útil:
+        - Primero léxicos, luego sintácticos, luego semánticos, luego warnings.
+        - Dentro de cada tipo, orden por (línea, col).
+        """
+        all_items = []
+        for lst in lists:
+            all_items.extend(lst)
+
+        def key(it: ErrorItem):
+            # orden por tipo
+            prio = 0
+            t = (it.tipo or "").lower()
+            if t.startswith("léx"):
+                prio = 0
+            elif t.startswith("lex"):
+                prio = 0
+            elif t.startswith("sint"):
+                prio = 1
+            elif t.startswith("sem"):
+                prio = 2
+            elif t.startswith("warn"):
+                prio = 3
+            else:
+                prio = 4
+            ln = it.linea if (it.linea is not None) else 10 ** 9
+            col = it.columna if (it.columna is not None) else 10 ** 9
+            return (prio, ln, col, it.mensaje or "")
+
+        all_items.sort(key=key)
+        for i, it in enumerate(all_items, start=1):
+            it.idx = i
+        return all_items
+
+    def _obtener_numero(self, default: int = 5) -> int:
+        """
+        Intenta obtener el valor de 'numero' de:
+          1) tabla_simbolos (lexer.analizador_lexico)
+          2) fallback: buscar en el código fuente 'numero = <entero>;'
+        Devuelve un entero (con fallback a 'default').
+        """
+        # 1) Tabla de símbolos
+        try:
+            from lexer.analizador_lexico import tabla_simbolos
+            symtab = tabla_simbolos.obtener_todos() or {}
+            for name, info in symtab.items():
+                if str(name).lower() == "numero":
+                    raw = info.get("valor", default)
+                    # normaliza: quita comillas, espacios
+                    s = str(raw).strip().strip('"').strip("'")
+                    # permite decimales pero trunca a int
+                    n = int(float(s))
+                    return max(0, n)
+        except Exception:
+            pass
+
+        # 2) Fallback: buscar "numero = 123;" en el código fuente
+        try:
+            src = self.tx_ingreso.toPlainText()
+            m = re.search(r'\bnumero\s*=\s*([0-9]+)', src)
+            if m:
+                return max(0, int(m.group(1)))
+        except Exception:
+            pass
+
+        return default
+
     # ==========================
     # Traducciones
     # ==========================
     def retranslateUi(self, home):
         _translate = QtCore.QCoreApplication.translate
         home.setWindowTitle(_translate("home", "Analizador de Código Java"))
+        # Orden de pestañas tal como se añadieron:
         self.analysisTabs.setTabText(0, _translate("home", "Análisis Léxico"))
         self.analysisTabs.setTabText(1, _translate("home", "Análisis Sintáctico"))
-        self.analysisTabs.setTabText(2, _translate("home", "Análisis Semantico"))
-        self.analysisTabs.setTabText(3, _translate("home", "Tabla de Símbolos"))
-        self.analysisTabs.setTabText(4, _translate("home", "Recorridos del Árbol"))
-        self.analysisTabs.setTabText(5, _translate("home", "Triplos"))
-        self.analysisTabs.setTabText(6, _translate("home", "Cuádruplos"))
-        self.analysisTabs.setTabText(7, _translate("home", "Código Ensamblador"))
-        self.analysisTabs.setTabText(8, _translate("home", "Salida del código"))
+        self.analysisTabs.setTabText(2, _translate("home", "Análisis Semántico"))
+        self.analysisTabs.setTabText(3, _translate("home", "Tabla de Errores"))
+        self.analysisTabs.setTabText(4, _translate("home", "Tabla de Símbolos"))
+        self.analysisTabs.setTabText(5, _translate("home", "Recorridos del Árbol"))
+        self.analysisTabs.setTabText(6, _translate("home", "Triplos"))
+        self.analysisTabs.setTabText(7, _translate("home", "Cuádruplos"))
+        self.analysisTabs.setTabText(8, _translate("home", "Ensamblador MASM"))
+        self.analysisTabs.setTabText(9, _translate("home", "Código Ensamblador"))
+        self.analysisTabs.setTabText(10, _translate("home", "Salida del código"))
 
         # Tooltips y textos de botones
         self.bt_lexico.setToolTip(_translate("home", "Realizar análisis léxico (F5)"))
         self.bt_sintactico.setToolTip(_translate("home", "Realizar análisis sintáctico (F6)"))
+        self.bt_semantico.setToolTip(_translate("home", "Realizar análisis semántico (F8)"))
         self.bt_simbolos.setToolTip(_translate("home", "Mostrar tabla de símbolos"))
+        self.bt_errores.setToolTip(_translate("home", "Mostrar tabla de errores"))  # NUEVO
         self.bt_arbol.setToolTip(_translate("home", "Visualización de recorridos: pre, in y post-orden (F7)"))
         self.bt_arbolLR.setText(_translate("home", "Generar Árbol LR"))
         self.bt_triplos.setToolTip(_translate("home", "Generar representación en triplos del código"))
         self.bt_cuadruplos.setToolTip(_translate("home", "Generar representación en cuádruplos del código"))
         self.bt_archivo.setToolTip(_translate("home", "Abrir un archivo Java (Ctrl+O)"))
-        self.bt_asm.setToolTip(_translate("home", "Generar/mostrar código ensamblador (F10)"))
+        self.bt_asm.setToolTip(_translate("home", "Generar/mostrar Ensamblador MASM (F10)"))
         self.bt_run.setToolTip(_translate("home", "Ejecutar el código y mostrar la salida"))
         self.bt_limpiar.setToolTip(_translate("home", "Limpiar todos los campos (Ctrl+L)"))
         self.bt_zoom_in.setToolTip(_translate("home", "Zoom + (Shift + \"+\")"))
@@ -900,5 +1159,3 @@ class Ui_home(object):
         self.bt_asm_clear.setText(_translate("home", "Limpiar ensamblador"))
         self.lb_output_status.setText(_translate("home", "Salida del código (solo diseño):"))
         self.bt_output_clear.setText(_translate("home", "Limpiar salida"))
-
-

@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
+
+from PyQt5 import QtGui
 from PyQt5.QtWidgets import QMainWindow, QFileDialog, QTableWidgetItem, QMessageBox, QTextEdit, QPlainTextEdit
 from PyQt5.QtGui import QColor, QBrush, QFont, QTextCharFormat, QTextCursor
 import re
