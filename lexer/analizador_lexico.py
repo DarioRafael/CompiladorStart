@@ -13,6 +13,7 @@ class TablaSimbolos:
         self.simbolos = {}
         self.alcance_actual = ['global']  # Pila de alcances (global, función, etc.)
         self.nivel_llaves = 0  # Contador de niveles de llaves para detectar bloques
+        self.en_metodo = False  # NUEVO: Flag para saber si estamos dentro de un método
 
     def agregar(self, nombre, tipo, linea, valor=None):
         """Agrega un símbolo a la tabla"""
@@ -29,12 +30,19 @@ class TablaSimbolos:
 
     def determinar_alcance(self):
         """Determina el alcance actual basado en el contexto"""
-        if self.nivel_llaves > 1:  # Más de 1 nivel de llaves = bloque local
-            return 'local'
-        elif len(self.alcance_actual) > 1:  # Dentro de método/función
-            return self.alcance_actual[-1]
-        else:
+        # Si no estamos en un método, es alcance global (variables de clase)
+        if not self.en_metodo:
             return 'global'
+
+        # Si estamos en un método y hay más de 1 nivel de llaves = bloque local
+        if self.en_metodo and self.nivel_llaves > 1:
+            return 'local'
+
+        # Si estamos en un método pero con 1 nivel de llaves o menos = alcance del método
+        if self.en_metodo and len(self.alcance_actual) > 1:
+            return self.alcance_actual[-1]
+
+        return 'global'
 
     def existe(self, nombre):
         """Verifica si un símbolo existe en la tabla"""
@@ -101,11 +109,15 @@ class TablaSimbolos:
     def abrir_alcance(self, nombre):
         """Abre un nuevo ámbito (por ejemplo, nombre del método)."""
         self.alcance_actual.append(nombre)
+        if nombre == 'main':  # NUEVO: Marcar que entramos al método main
+            self.en_metodo = True
 
     def cerrar_alcance(self):
         """Cierra el ámbito actual."""
         if len(self.alcance_actual) > 1:
-            self.alcance_actual.pop()
+            alcance_cerrado = self.alcance_actual.pop()
+            if alcance_cerrado == 'main':  # NUEVO: Salimos del método main
+                self.en_metodo = False
 
     def abrir_bloque(self):
         """Incrementa el contador de bloques { }."""
@@ -115,6 +127,9 @@ class TablaSimbolos:
         """Decrementa el contador de bloques { }."""
         if self.nivel_llaves > 0:
             self.nivel_llaves -= 1
+        # NUEVO: Si salimos del último bloque del método, salimos del método
+        if self.nivel_llaves == 0 and self.en_metodo:
+            self.cerrar_alcance()
 
     def obtener_todos(self):
         """Todos los símbolos."""
@@ -125,6 +140,7 @@ class TablaSimbolos:
         self.simbolos = {}
         self.alcance_actual = ['global']
         self.nivel_llaves = 0
+        self.en_metodo = False  # NUEVO: Reset del flag
 
     def verificar_uso(self):
         return [
@@ -253,13 +269,12 @@ def t_LLADER(t):
 
 # NUEVO: Manejo especial del operador de asignación
 def t_ASIGNAR(t):
-    r'=(?!=)'   # '=' que NO está seguido de '='  -> no choca con '=='
+    r'=(?!=)'  # '=' que NO está seguido de '='  -> no choca con '=='
     # Si acabamos de ver un identificador, preparamos para capturar su valor
     if estados.get('ultimo_identificador') and not estados.get('esperando_valor'):
         estados['esperando_valor'] = True
         estados['variable_reciente'] = estados['ultimo_identificador']
     return t
-
 
 
 def t_DECIMAL(t):
@@ -321,14 +336,21 @@ def t_IDENTIFICADOR(t):
         estados['ultimo_tipo'] = t.type
         estados['modo_declaracion'] = True
     elif estados['modo_declaracion'] and t.type == 'IDENTIFICADOR':
+        # CORRECCIÓN: Usar el alcance determinado por la tabla de símbolos
         alcance_actual = tabla_simbolos.determinar_alcance()
         if estados['en_for']:
             alcance_actual = 'local'
+
         tabla_simbolos.agregar(t.value, estados['ultimo_tipo'], t.lineno)
-        # Refuerza el alcance guardado
+
+        # CORRECCIÓN: Ajustar el alcance después de agregar
         nombre_completo = f"{alcance_actual}.{t.value}" if alcance_actual != 'global' else t.value
         if nombre_completo in tabla_simbolos.simbolos:
             tabla_simbolos.simbolos[nombre_completo]['alcance'] = alcance_actual
+
+        print(
+            f"[DEBUG] Variable '{t.value}' declarada en alcance '{alcance_actual}' (en_metodo: {tabla_simbolos.en_metodo}, nivel_llaves: {tabla_simbolos.nivel_llaves})")
+
         estados['modo_declaracion'] = False
         # NUEVO: Guardar como último identificador para posibles asignaciones
         estados['ultimo_identificador'] = t.value
@@ -348,6 +370,7 @@ def t_IDENTIFICADOR(t):
         estados['metodo_actual'] = 'main'
         tabla_simbolos.abrir_alcance('main')
         tabla_simbolos.agregar('main', 'METHOD', t.lineno)
+        print(f"[DEBUG] Entrando al método main (en_metodo: {tabla_simbolos.en_metodo})")
 
     return t
 
